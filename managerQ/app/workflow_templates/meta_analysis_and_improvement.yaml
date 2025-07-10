@@ -1,0 +1,30 @@
+
+workflow_id: "wf_meta_analysis_and_improvement"
+original_prompt: "Analyze platform performance and delegate a task to improve an inefficient workflow."
+shared_context:
+  # The initial prompt from the Airflow DAG is injected here
+  analysis_request: "{{ trigger.payload.prompt }}"
+
+tasks:
+  - task_id: "find_inefficient_workflow"
+    type: "task"
+    agent_personality: "meta_analyzer"
+    prompt: |
+      Based on the request: "{{ shared_context.analysis_request }}",
+      Write and execute a SQL query against the workflow database to identify the `workflow_id` of a workflow template that has failed more than 3 times in the last 7 days.
+      Your output MUST be only the JSON result from the query.
+    dependencies: []
+
+  - task_id: "delegate_improvement_task"
+    type: "task"
+    agent_personality: "meta_analyzer"
+    prompt: |
+      The following query result identifies an inefficient workflow:
+      ---
+      {{ tasks.find_inefficient_workflow.result }}
+      ---
+      Based on this data, create a new goal for a Software Engineer agent to fix the underlying issue.
+      The prompt for the new goal should be:
+      "The workflow template identified in the attached data is failing frequently. Please analyze the workflow template, identify a potential cause for the failures, and propose a fix by opening a pull request."
+    dependencies:
+      - "find_inefficient_workflow" 

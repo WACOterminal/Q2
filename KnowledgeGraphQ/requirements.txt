@@ -1,0 +1,17 @@
+
+# Core application dependencies
+fastapi
+uvicorn[standard]
+pydantic
+gremlinpython==3.7.0
+structlog
+pyyaml
+fastavro
+apache-flink
+httpx
+langchain
+sentence-transformers
+
+# Shared Libraries (installed in editable mode)
+# These are required for the application to run.
+-e ./shared/q_auth_parser

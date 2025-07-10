@@ -1,0 +1,50 @@
+
+workflow_id: "wf_hierarchical_onboarding"
+original_prompt: "Onboard a new developer to the H2M service by providing a documentation summary and an overview of the main API endpoints."
+shared_context:
+  service_name: "H2M"
+  readme_path: "H2M/README.md"
+  # The ID of the parent work package would be injected here by the Goal Monitor
+  parent_work_package_id: "{{ trigger.source_id }}" 
+
+tasks:
+  - task_id: "create_summary_sub_goal"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      Create a new sub-goal to analyze and summarize the documentation for the '{{ shared_context.service_name }}' service.
+      The prompt for the new goal should be: "Read the file at '{{ shared_context.readme_path }}' and provide a concise, one-paragraph summary of its purpose and architecture."
+      The parent ID for this new goal is {{ shared_context.parent_work_package_id }}.
+    dependencies: []
+
+  - task_id: "create_api_analysis_sub_goal"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      Create a new sub-goal to analyze the source code of the '{{ shared_context.service_name }}' service to identify its main API endpoints.
+      The prompt for the new goal should be: "Analyze the directory '{{ shared_context.service_name }}/app/api/' to identify the main API routes, their purpose, and the expected request/response format for each."
+      The parent ID for this new goal is {{ shared_context.parent_work_package_id }}.
+    dependencies: []
+
+  - task_id: "await_sub_goals"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      Wait for the following sub-goals to complete, then report success.
+      - Documentation Summary Goal ID: {{ tasks.create_summary_sub_goal.result.id }}
+      - API Analysis Goal ID: {{ tasks.create_api_analysis_sub_goal.result.id }}
+      Execute the await_goal_completion tool for each, saving the results to the context.
+      The parent workflow ID is '{{ workflow.workflow_id }}'.
+    dependencies:
+      - "create_summary_sub_goal"
+      - "create_api_analysis_sub_goal"
+
+  - task_id: "synthesize_results"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      The sub-goals for documentation and API analysis are complete.
+      Their results are stored in the shared context.
+      Synthesize these results into a final, formatted onboarding guide for the new developer.
+    dependencies:
+      - "await_sub_goals" 

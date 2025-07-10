@@ -1,0 +1,23 @@
+# .github/workflows/aiops-log-ingestion-ci.yml
+name: CI - AIOps Log Ingestion Job
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'AIOps/flink_jobs/log_ingestion/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'AIOps/flink_jobs/log_ingestion/**'
+
+jobs:
+  build-and-push-image:
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      service_name: aiops-log-ingestion
+      dockerfile_path: ./AIOps/flink_jobs/log_ingestion/Dockerfile
+    secrets:
+      REGISTRY_USER: ${{ secrets.HARBOR_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+      REGISTRY_URL: ${{ secrets.HARBOR_URL }} 

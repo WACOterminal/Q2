@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-keycloak-client
+python-jose[cryptography]
+pydantic
+
+# Shared Libraries
+pyyaml
+
+# Testing
+pytest
+pytest-mock
+pact-python

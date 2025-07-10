@@ -1,0 +1,6 @@
+pulsar-client
+pydantic-settings
+jinja2
+python-json-logger
+opentelemetry-api
+opentelemetry-sdk 

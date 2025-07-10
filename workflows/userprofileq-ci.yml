@@ -1,0 +1,23 @@
+# .github/workflows/userprofileq-ci.yml
+name: CI - UserProfileQ
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'UserProfileQ/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'UserProfileQ/**'
+
+jobs:
+  build-and-push-image:
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      service_name: userprofileq
+      dockerfile_path: ./UserProfileQ/Dockerfile
+    secrets:
+      REGISTRY_USER: ${{ secrets.HARBOR_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+      REGISTRY_URL: ${{ secrets.HARBOR_URL }} 

@@ -1,0 +1,16 @@
+name: "Jira Issue Created"
+id: "jira-issue-created"
+trigger:
+  type: "webhook"
+  event: "jira:issue_created"
+steps:
+  - id: "delegate-to-agent"
+    type: "task"
+    task:
+      agent_personality: "default"
+      prompt: >
+        A new Jira issue has been created.
+        Issue Key: {{ trigger.issue.key }}
+        Summary: {{ trigger.issue.fields.summary }}
+        Description: {{ trigger.issue.fields.description }}
+        Please analyze this issue and determine the next steps. 

@@ -1,0 +1,42 @@
+{
+    "type": "record",
+    "name": "AnomalyEvent",
+    "namespace": "com.qagi.aiops",
+    "fields": [
+        {
+            "name": "event_id",
+            "type": "string"
+        },
+        {
+            "name": "service_name",
+            "type": "string"
+        },
+        {
+            "name": "metric_name",
+            "type": "string"
+        },
+        {
+            "name": "anomalous_value",
+            "type": "double"
+        },
+        {
+            "name": "expected_value",
+            "type": "double"
+        },
+        {
+            "name": "severity",
+            "type": {
+                "type": "enum",
+                "name": "AnomalySeverity",
+                "symbols": ["WARNING", "CRITICAL"]
+            }
+        },
+        {
+            "name": "timestamp",
+            "type": {
+                "type": "long",
+                "logicalType": "timestamp-millis"
+            }
+        }
+    ]
+} 

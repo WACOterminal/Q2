@@ -1,0 +1,8 @@
+# AgentSandbox/requirements.txt
+fastapi
+uvicorn
+pyyaml
+httpx
+structlog
+python-json-logger
+dpath

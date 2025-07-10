@@ -1,0 +1,28 @@
+# ArgoCD Helm chart values
+# See: https://github.com/argoproj/argo-helm/blob/main/charts/argo-cd/values.yaml
+
+# Expose the ArgoCD server via a LoadBalancer for easy UI access
+server:
+  service:
+    type: LoadBalancer
+
+# Enable persistence for ArgoCD data
+persistence:
+  enabled: true
+  size: 10Gi
+
+# Disable TLS for local dev. Production should use TLS.
+insecure: true
+
+# Use a smaller, non-HA Redis for local dev
+redis:
+  ha:
+    enabled: false
+
+# Disable HA for the repo server in local dev
+repoServer:
+  replicas: 1
+
+# Disable HA for the application controller in local dev
+controller:
+  replicas: 1 

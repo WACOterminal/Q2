@@ -1,0 +1,19 @@
+# infra/kubernetes/base/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# All resources will be deployed into this namespace
+namespace: q-platform
+
+# List of all the service manifests to include in the deployment
+resources:
+  - agentq/
+  - authq/
+  - h2m-service/
+  - knowledgegraphq/
+  - manager-q/
+  - quantumpulse/
+  - vectorstore-q/
+  - webapp-q/
+  - userprofileq/
+  - aiops/

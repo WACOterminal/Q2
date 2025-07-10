@@ -1,0 +1,5 @@
+# tests/integration/requirements.txt
+# Core test dependencies are installed via pip with constraints in the CI workflow.
+# This file is for dependencies specific to the integration test environment.
+docker-compose
+tenacity 

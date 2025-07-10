@@ -1,0 +1,25 @@
+
+workflow_id: "wf_fix_scenario_typo"
+original_prompt: "Fix the generic goal_objective in the proactive scaling scenario file."
+shared_context:
+  source_file: "AIOps/scenarios/proactive_scaling_scenario.yaml"
+  target_file: "workspace/proactive_scaling_scenario.fixed.yaml"
+  new_objective: "Proactively scale the QuantumPulse-Worker deployment when a CPU usage breach is predicted to maintain service performance."
+tasks:
+  - task_id: "read_file_content"
+    type: "task"
+    agent_personality: "default"
+    prompt: "Read the full content of the file located at '{{ shared_context.source_file }}' and output the content as a raw string."
+    dependencies: []
+  - task_id: "modify_and_write_file"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      The following is the content of a YAML file:
+      ---
+      {{ tasks.read_file_content.result }}
+      ---
+      Modify the 'goal_objective' field to be "{{ shared_context.new_objective }}".
+      Then, write the complete and updated YAML content to a new file at the path '{{ shared_context.target_file }}'.
+    dependencies:
+      - "read_file_content" 

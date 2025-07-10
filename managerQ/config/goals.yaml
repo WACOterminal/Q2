@@ -1,0 +1,70 @@
+# /managerQ/config/goals.yaml
+- goal_id: "goal_cpu_remediation"
+  objective: "Ensure no service exceeds 80% CPU utilization for a sustained period."
+  is_active: true
+  conditions:
+    - service: "*" # Wildcard for all services
+      metric: "cpu_utilization_percent"
+      operator: ">"
+      value: 80
+      duration_minutes: 5
+  # This workflow must be pre-loaded into the Ignite 'workflows' cache
+  remediation_workflow_id: "wf_auto_scale_service"
+
+- goal_id: "goal_fix_scenario_typo_on_startup"
+  objective: "Correct the generic objective in the proactive scaling scenario to be more specific."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_fix_scenario_typo"
+
+- goal_id: "goal_tdd_refactor_example_utils"
+  objective: "Refactor the example_utils.py file for clarity and verify with tests."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_test_driven_development"
+  # Override the default context in the workflow template
+  context_overrides:
+    source_file: "agentQ/app/core/example_utils.py"
+    test_command: "python -m unittest agentQ/tests/test_example_utils.py"
+    refactor_request: "The function 'add_numbers' is too verbose. Refactor it to be a single line and remove the unnecessary comment."
+
+- goal_id: "goal_hierarchical_onboarding_on_startup"
+  objective: "Demonstrate hierarchical planning by kicking off the developer onboarding workflow."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_hierarchical_onboarding"
+
+- goal_id: "goal_self_healing_demo_on_startup"
+  objective: "Demonstrate self-healing by triaging and fixing a simulated bug report."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_triage_bug_report"
+  context_overrides:
+    trigger:
+      payload:
+        prompt: "The add_numbers function in example_utils.py is not returning the correct sum for negative numbers."
+        source_id: "openproject-456" # Simulated OpenProject ticket ID
+    # This context needs to be available to the sub-workflow as well.
+    # A more robust system would handle this propagation automatically.
+    # For now, we will assume the TDD workflow has the correct defaults.
+    repo: "your-github-org/your-repo-name" # This needs to be configured
+
+- goal_id: "goal_ast_refactor_on_startup"
+  objective: "Demonstrate AST-based refactoring by renaming a variable and verifying with linter and tests."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_ast_refactor_and_lint"
+
+# --- Pre-defined Remediation Workflows ---
+# This is a conceptual representation of a workflow that would be loaded into Ignite.
+# ID: wf_auto_scale_service
+# Tasks:
+#   - task_id: "task_1"
+#     agent_personality: "devops"
+#     prompt: "The service '{{ failed_condition.service }}' has breached its CPU threshold. Scale it up by one replica using the `increase_service_replicas` tool."
+#     dependencies: [] 

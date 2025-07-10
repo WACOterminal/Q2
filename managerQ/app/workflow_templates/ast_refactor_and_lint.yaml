@@ -1,0 +1,53 @@
+
+workflow_id: "wf_ast_refactor_and_lint"
+original_prompt: "Safely refactor the example_utils.py file using AST and verify with linter and tests."
+shared_context:
+  source_file: "agentQ/app/core/example_utils.py"
+  function_to_refactor: "add_numbers"
+  old_var_name: "b"
+  new_var_name: "number_two"
+  test_command: "python -m unittest agentQ/tests/test_example_utils.py"
+
+tasks:
+  - task_id: "ast_rename_variable"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      Use the AST tool to rename a variable in the function '{{ shared_context.function_to_refactor }}' 
+      within the file '{{ shared_context.source_file }}'.
+      Rename the variable '{{ shared_context.old_var_name }}' to '{{ shared_context.new_var_name }}'.
+    dependencies: []
+
+  - task_id: "lint_the_refactored_code"
+    type: "task"
+    agent_personality: "default"
+    prompt: "Run the linter on the file '{{ shared_context.source_file }}' to ensure the AST transformation produced clean code."
+    dependencies: ["ast_rename_variable"]
+
+  - task_id: "run_unit_tests"
+    type: "task"
+    agent_personality: "default"
+    prompt: "Run the unit tests using the command: '{{ shared_context.test_command }}'."
+    dependencies: ["lint_the_refactored_code"]
+
+  - task_id: "final_check"
+    type: "conditional"
+    dependencies: ["run_unit_tests"]
+    branches:
+      - condition: "'Exit Code: 0' in tasks.run_unit_tests.result and '\"status\": \"success\"' in tasks.lint_the_refactored_code.result"
+        tasks:
+          - task_id: "report_success"
+            type: "task"
+            agent_personality: "default"
+            prompt: "The AST refactoring, linting, and unit tests all completed successfully."
+            dependencies: []
+      - condition: "true"
+        tasks:
+          - task_id: "report_failure"
+            type: "task"
+            agent_personality: "default"
+            prompt: |
+              The refactoring process failed.
+              Linter Result: {{ tasks.lint_the_refactored_code.result }}
+              Test Result: {{ tasks.run_unit_tests.result }}
+            dependencies: [] 

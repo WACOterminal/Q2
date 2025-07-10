@@ -1,0 +1,16 @@
+
+fastapi
+uvicorn
+pyyaml
+structlog
+python-json-logger
+pulsar-client
+pyignite
+fastavro
+jinja2
+sentence-transformers
+
+# Testing
+pytest
+pytest-mock
+pact-python

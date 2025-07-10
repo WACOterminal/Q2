@@ -1,0 +1,8 @@
+# Flink job dependencies
+apache-flink
+
+# For statistical calculations
+numpy
+
+# For persisting stats to Ignite
+pyignite 

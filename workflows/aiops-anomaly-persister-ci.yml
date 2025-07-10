@@ -1,0 +1,23 @@
+# .github/workflows/aiops-anomaly-persister-ci.yml
+name: CI - AIOps Anomaly Persister Job
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'AIOps/flink_jobs/anomaly_persister/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'AIOps/flink_jobs/anomaly_persister/**'
+
+jobs:
+  build-and-push-image:
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      service_name: aiops-anomaly-persister
+      dockerfile_path: ./AIOps/flink_jobs/anomaly_persister/Dockerfile
+    secrets:
+      REGISTRY_USER: ${{ secrets.HARBOR_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+      REGISTRY_URL: ${{ secrets.HARBOR_URL }} 

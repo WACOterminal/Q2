@@ -1,0 +1,72 @@
+# .github/workflows/security_scan.yml
+name: Security Scan
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  semgrep:
+    name: Semgrep Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Semgrep
+        id: semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          publishToken: ${{ secrets.SEMGREP_APP_TOKEN }}
+          publishDeployment: ${{ secrets.SEMGREP_DEPLOYMENT_ID }}
+          generateSarif: "true"
+
+      - name: Comment on PR
+        uses: actions/github-script@v6
+        if: always()
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(comment =>
+              comment.user.login === 'github-actions[bot]' && comment.body.includes('Semgrep Scan Results')
+            );
+            
+            const sarif = JSON.parse(require('fs').readFileSync('semgrep.sarif', 'utf8'));
+            const results = sarif.runs[0].results;
+            let body;
+
+            if (results.length > 0) {
+              body = `### Semgrep Scan Results 🛡️\n\nFound ${results.length} potential issues:\n\n`;
+              body += '| Rule | File | Line | Message |\n';
+              body += '|------|------|------|---------|\n';
+              for (const result of results) {
+                const ruleId = result.ruleId;
+                const location = result.locations[0].physicalLocation;
+                const file = location.artifactLocation.uri;
+                const line = location.region.startLine;
+                const message = result.message.text;
+                body += `| ${ruleId} | \`${file}\` | ${line} | ${message} |\n`;
+              }
+            } else {
+              body = '### Semgrep Scan Results 🛡️\n\n✅ No security issues found.';
+            }
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            } 

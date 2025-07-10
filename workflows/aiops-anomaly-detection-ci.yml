@@ -1,0 +1,23 @@
+# .github/workflows/aiops-anomaly-detection-ci.yml
+name: CI - AIOps Anomaly Detection Job
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'AIOps/flink_jobs/anomaly_detection/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'AIOps/flink_jobs/anomaly_detection/**'
+
+jobs:
+  build-and-push-image:
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      service_name: aiops-anomaly-detection
+      dockerfile_path: ./AIOps/flink_jobs/anomaly_detection/Dockerfile
+    secrets:
+      REGISTRY_USER: ${{ secrets.HARBOR_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+      REGISTRY_URL: ${{ secrets.HARBOR_URL }} 

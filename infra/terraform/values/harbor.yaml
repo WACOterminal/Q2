@@ -1,0 +1,33 @@
+# Basic Harbor configuration for development
+# See: https://github.com/goharbor/harbor-helm/blob/master/values.yaml
+
+expose:
+  type: loadBalancer
+  tls:
+    enabled: false
+
+externalURL: http://localhost # This will be the external IP of the load balancer
+
+harborAdminPassword: "Password123"
+
+# Disable services not needed for a basic dev setup
+notary:
+  enabled: false
+
+trivy:
+  enabled: false
+
+chartmuseum:
+  enabled: false
+
+portal:
+  enabled: true # Keep the UI enabled
+
+# Use internal persistence
+persistence:
+  enabled: true
+  resourcePolicy: "keep"
+  imageChartStorage:
+    type: "filesystem"
+    filesystem:
+      rootdirectory: /storage 

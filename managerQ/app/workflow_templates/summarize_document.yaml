@@ -1,0 +1,24 @@
+
+workflow_id: "wf_summarize_document"
+original_prompt: "Read the specified document and provide a one-paragraph summary."
+shared_context:
+  source_file: "path/to/your/document.md"
+
+tasks:
+  - task_id: "read_the_document"
+    type: "task"
+    agent_personality: "default"
+    prompt: "Read the full content of the file at '{{ shared_context.source_file }}'."
+    dependencies: []
+
+  - task_id: "generate_summary"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      Summarize the following document content in a single paragraph.
+      Your final output for this task MUST be a single JSON object with a single key, "summary".
+      ---
+      {{ tasks.read_the_document.result }}
+      ---
+    dependencies:
+      - "read_the_document" 

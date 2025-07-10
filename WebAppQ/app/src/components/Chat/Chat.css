@@ -1,0 +1,142 @@
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 100px);
+    width: 100%;
+    max-width: 800px;
+    margin: 20px auto;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+
+.connection-status {
+    padding: 8px 12px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+    font-size: 0.9em;
+    color: #555;
+}
+
+.connected {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.disconnected {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.message-window {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    background-color: #f9f9f9;
+}
+
+.message {
+    padding: 10px 15px;
+    border-radius: 18px;
+    margin-bottom: 10px;
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+.message.user {
+    background-color: #007bff;
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.message.agent {
+    background-color: #e9e9eb;
+    color: black;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
+.message.thought {
+    background-color: #fffbe6; /* A light yellow background */
+    color: #5d5d5d;
+    align-self: flex-start;
+    border: 1px dashed #d4b106;
+    font-style: italic;
+    font-size: 0.9em;
+    max-width: 80%;
+}
+
+.input-area {
+    display: flex;
+    padding: 10px;
+    border-top: 1px solid #ccc;
+    background-color: #fff;
+}
+
+.input-area input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    margin-right: 10px;
+    font-size: 1em;
+}
+
+.input-area button {
+    padding: 10px 20px;
+    border: none;
+    background-color: #007bff;
+    color: white;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s;
+}
+
+.input-area button:hover {
+    background-color: #0056b3;
+}
+
+.input-area button:disabled {
+    background-color: #a0a0a0;
+    cursor: not-allowed;
+}
+
+.message-text {
+    margin-right: 10px; /* Space between text and buttons */
+    flex-grow: 1;
+}
+
+.feedback-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.feedback-buttons button {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 14px;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.feedback-buttons button:hover:not(:disabled) {
+    background-color: #e0e0e0;
+    transform: scale(1.1);
+}
+
+.feedback-buttons button:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.feedback-buttons button.selected {
+    border-color: #007bff;
+    background-color: #cce5ff;
+}

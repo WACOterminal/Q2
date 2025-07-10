@@ -1,0 +1,26 @@
+# Core API
+fastapi
+uvicorn
+structlog
+python-multipart
+dpath
+jinja2
+pyyaml
+pulsar-client
+fastavro
+hvac
+httpx
+
+# For connecting to external services
+zulip_bots
+emails
+
+# Connectors
+PyGithub
+kubernetes
+
+# Utilities
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+prometheus-client

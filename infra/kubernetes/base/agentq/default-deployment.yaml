@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentq-default
+spec:
+  replicas: 2 # We can run multiple general-purpose agents
+  selector:
+    matchLabels:
+      app: agentq-default
+  template:
+    metadata:
+      labels:
+        app: agentq-default
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+      - name: agentq
+        image: your-repo/agentq:latest # Replace with your image repository
+        ports:
+        - containerPort: 8000 # Add a port for the health check
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 45
+          periodSeconds: 30
+        env:
+        - name: AGENT_PERSONALITY
+          value: "default"
+        - name: LOGS_TO_PULSAR
+          value: "true"
+        # Add other environment variables for secrets, Ignite, etc. 

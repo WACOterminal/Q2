@@ -1,0 +1,45 @@
+
+workflow_id: "wf_triage_bug_report"
+original_prompt: "Triage the incoming bug report, identify the source, and delegate a fix."
+shared_context:
+  # The bug report description will be injected here by the EventListener
+  bug_report_description: "{{ trigger.payload.prompt }}"
+  parent_work_package_id: "{{ trigger.payload.source_id }}"
+
+tasks:
+  - task_id: "identify_source_file"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      The following bug has been reported: "{{ shared_context.bug_report_description }}"
+      Search the codebase to identify the single most likely source file that needs to be fixed.
+      Your output MUST be only the file path as a string (e.g., "src/components/Chat/Chat.tsx").
+    dependencies: []
+
+  - task_id: "delegate_fix_to_developer_agent"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      A bug has been identified in the file '{{ tasks.identify_source_file.result }}'.
+      Create a new sub-goal to fix this bug. The parent work package ID is {{ shared_context.parent_work_package_id }}.
+      The prompt for the new goal should be:
+      "The following bug was reported: '{{ shared_context.bug_report_description }}'. The problem is in the file '{{ tasks.identify_source_file.result }}'. Please fix the bug and ensure the tests pass."
+      The context for this new goal should specify that it must use the 'wf_test_driven_development' workflow.
+    dependencies:
+      - "identify_source_file"
+
+  - task_id: "await_fix"
+    type: "task"
+    agent_personality: "default"
+    prompt: "Await the completion of the sub-goal with ID {{ tasks.delegate_fix_to_developer_agent.result.id }} and store its result in the context key 'fix_result'."
+    dependencies:
+      - "delegate_fix_to_developer_agent"
+
+  - task_id: "close_original_ticket"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      The sub-goal to fix the bug has completed. The result was: {{ shared_context.fix_result }}.
+      Update the parent work package {{ shared_context.parent_work_package_id }} with a comment summarizing the result and marking the ticket as resolved.
+    dependencies:
+      - "await_fix" 
