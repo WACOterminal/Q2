@@ -7,7 +7,7 @@ import jinja2
 from collections import deque
 
 from app.models.flow import Flow, FlowStep
-from app.models.connector import Connector, ConnectorAction, BaseConnector
+from app.models.connector import ConnectorAction, BaseConnector
 from app.connectors.zulip.zulip_connector import zulip_connector
 from app.connectors.smtp.email_connector import email_connector
 from app.connectors.pulsar.pulsar_connector import pulsar_publisher_connector
@@ -21,13 +21,8 @@ from app.api.flows import PREDEFINED_FLOWS
 
 
 # A registry of all available connector instances
-AVAILABLE_CONNECTORS: Dict[str, Connector] = {
-    zulip_connector.connector_id: zulip_connector,
-    email_connector.connector_id: email_connector,
-    pulsar_publisher_connector.connector_id: pulsar_publisher_connector,
-    http_connector.connector_id: http_connector,
-    github_connector.connector_id: github_connector,
-}
+# Note: This will be populated after connector registration below
+AVAILABLE_CONNECTORS: Dict[str, BaseConnector] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +37,8 @@ class FlowExecutionEngine:
             self.logger.warning(f"Connector '{connector.connector_id}' is already registered. Overwriting.")
         self.logger.info(f"Registering connector: {connector.connector_id}")
         self._connectors[connector.connector_id] = connector
+        # Also add to global registry for backward compatibility
+        AVAILABLE_CONNECTORS[connector.connector_id] = connector
 
     def _get_connector(self, connector_id: str) -> Optional['BaseConnector']:
         return self._connectors.get(connector_id)
@@ -192,10 +189,20 @@ from ..connectors.smtp.email_connector import email_connector
 from ..connectors.zulip.zulip_connector import zulip_connector
 from ..connectors.openproject.openproject_connector import openproject_connector
 from ..connectors.kubernetes.kubernetes_connector import kubernetes_connector
+from ..connectors.gitlab.gitlab_connector import gitlab_connector
+from ..connectors.nextcloud.nextcloud_connector import nextcloud_connector
+from ..connectors.onlyoffice.onlyoffice_connector import onlyoffice_connector
+from ..connectors.freecad.freecad_connector import freecad_connector
+from ..connectors.multimedia.multimedia_connector import multimedia_connector
 
 engine.register_connector(github_connector)
 engine.register_connector(http_connector)
 engine.register_connector(email_connector)
 engine.register_connector(zulip_connector)
 engine.register_connector(openproject_connector)
-engine.register_connector(kubernetes_connector) 
+engine.register_connector(kubernetes_connector)
+engine.register_connector(gitlab_connector)
+engine.register_connector(nextcloud_connector)
+engine.register_connector(onlyoffice_connector)
+engine.register_connector(freecad_connector)
+engine.register_connector(multimedia_connector) 

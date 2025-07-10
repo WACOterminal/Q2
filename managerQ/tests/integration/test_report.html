@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title id="head-title">test_report.html</title>
+      <style type="text/css">body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  /* do not increase min-width as some may use split screens */
+  min-width: 800px;
+  color: #999;
+}
+
+h1 {
+  font-size: 24px;
+  color: black;
+}
+
+h2 {
+  font-size: 16px;
+  color: black;
+}
+
+p {
+  color: black;
+}
+
+a {
+  color: #999;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+#environment td {
+  padding: 5px;
+  border: 1px solid #e6e6e6;
+  vertical-align: top;
+}
+#environment tr:nth-child(odd) {
+  background-color: #f6f6f6;
+}
+#environment ul {
+  margin: 0;
+  padding: 0 20px;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed,
+.passed .col-result {
+  color: green;
+}
+
+span.skipped,
+span.xfailed,
+span.rerun,
+.skipped .col-result,
+.xfailed .col-result,
+.rerun .col-result {
+  color: orange;
+}
+
+span.error,
+span.failed,
+span.xpassed,
+.error .col-result,
+.failed .col-result,
+.xpassed .col-result {
+  color: red;
+}
+
+.col-links__extra {
+  margin-right: 3px;
+}
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+#results-table {
+  border: 1px solid #e6e6e6;
+  color: #999;
+  font-size: 12px;
+  width: 100%;
+}
+#results-table th,
+#results-table td {
+  padding: 5px;
+  border: 1px solid #e6e6e6;
+  text-align: left;
+}
+#results-table th {
+  font-weight: bold;
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+.logwrapper {
+  max-height: 230px;
+  overflow-y: scroll;
+  background-color: #e6e6e6;
+}
+.logwrapper.expanded {
+  max-height: none;
+}
+.logwrapper.expanded .logexpander:after {
+  content: "collapse [-]";
+}
+.logwrapper .logexpander {
+  z-index: 1;
+  position: sticky;
+  top: 10px;
+  width: max-content;
+  border: 1px solid;
+  border-radius: 3px;
+  padding: 5px 7px;
+  margin: 10px 0 10px calc(100% - 80px);
+  cursor: pointer;
+  background-color: #e6e6e6;
+}
+.logwrapper .logexpander:after {
+  content: "expand [+]";
+}
+.logwrapper .logexpander:hover {
+  color: #000;
+  border-color: #000;
+}
+.logwrapper .log {
+  min-height: 40px;
+  position: relative;
+  top: -50px;
+  height: calc(100% + 50px);
+  border: 1px solid #e6e6e6;
+  color: black;
+  display: block;
+  font-family: "Courier New", Courier, monospace;
+  padding: 5px;
+  padding-right: 80px;
+  white-space: pre-wrap;
+}
+
+div.media {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin: 0 5px;
+  overflow: hidden;
+  width: 320px;
+}
+
+.media-container {
+  display: grid;
+  grid-template-columns: 25px auto 25px;
+  align-items: center;
+  flex: 1 1;
+  overflow: hidden;
+  height: 200px;
+}
+
+.media-container--fullscreen {
+  grid-template-columns: 0px auto 0px;
+}
+
+.media-container__nav--right,
+.media-container__nav--left {
+  text-align: center;
+  cursor: pointer;
+}
+
+.media-container__viewport {
+  cursor: pointer;
+  text-align: center;
+  height: inherit;
+}
+.media-container__viewport img,
+.media-container__viewport video {
+  object-fit: cover;
+  width: 100%;
+  max-height: 100%;
+}
+
+.media__name,
+.media__counter {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  flex: 0 0 25px;
+  align-items: center;
+}
+
+.collapsible td:not(.col-links) {
+  cursor: pointer;
+}
+.collapsible td:not(.col-links):hover::after {
+  color: #bbb;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.col-result {
+  width: 130px;
+}
+.col-result:hover::after {
+  content: " (hide details)";
+}
+
+.col-result.collapsed:hover::after {
+  content: " (show details)";
+}
+
+#environment-header h2:hover::after {
+  content: " (hide details)";
+  color: #bbb;
+  font-style: italic;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#environment-header.collapsed h2:hover::after {
+  content: " (show details)";
+  color: #bbb;
+  font-style: italic;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+  cursor: pointer;
+}
+.sortable.desc:after {
+  content: " ";
+  position: relative;
+  left: 5px;
+  bottom: -12.5px;
+  border: 10px solid #4caf50;
+  border-bottom: 0;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+.sortable.asc:after {
+  content: " ";
+  position: relative;
+  left: 5px;
+  bottom: 12.5px;
+  border: 10px solid #4caf50;
+  border-top: 0;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.hidden, .summary__reload__button.hidden {
+  display: none;
+}
+
+.summary__data {
+  flex: 0 0 550px;
+}
+.summary__reload {
+  flex: 1 1;
+  display: flex;
+  justify-content: center;
+}
+.summary__reload__button {
+  flex: 0 0 300px;
+  display: flex;
+  color: white;
+  font-weight: bold;
+  background-color: #4caf50;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.summary__reload__button:hover {
+  background-color: #46a049;
+}
+.summary__spacer {
+  flex: 0 0 550px;
+}
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+}
+
+.filters,
+.collapse {
+  display: flex;
+  align-items: center;
+}
+.filters button,
+.collapse button {
+  color: #999;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.filters button:hover,
+.collapse button:hover {
+  color: #ccc;
+}
+
+.filter__label {
+  margin-right: 10px;
+}
+
+      </style>
+    
+  </head>
+  <body>
+    <h1 id="title">test_report.html</h1>
+    <p>Report generated on 10-Jul-2025 at 22:37:28 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a>
+        v4.1.1</p>
+    <div id="environment-header">
+      <h2>Environment</h2>
+    </div>
+    <table id="environment"></table>
+    <!-- TEMPLATES -->
+      <template id="template_environment_row">
+      <tr>
+        <td></td>
+        <td></td>
+      </tr>
+    </template>
+    <template id="template_results-table__body--empty">
+      <tbody class="results-table-row">
+        <tr id="not-found-message">
+          <td colspan="4">No results found. Check the filters.</th>
+        </tr>
+    </template>
+    <template id="template_results-table__tbody">
+      <tbody class="results-table-row">
+        <tr class="collapsible">
+        </tr>
+        <tr class="extras-row">
+          <td class="extra" colspan="4">
+            <div class="extraHTML"></div>
+            <div class="media">
+              <div class="media-container">
+                  <div class="media-container__nav--left"><</div>
+                  <div class="media-container__viewport">
+                    <img src="" />
+                    <video controls>
+                      <source src="" type="video/mp4">
+                    </video>
+                  </div>
+                  <div class="media-container__nav--right">></div>
+                </div>
+                <div class="media__name"></div>
+                <div class="media__counter"></div>
+            </div>
+            <div class="logwrapper">
+              <div class="logexpander"></div>
+              <div class="log"></div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </template>
+    <!-- END TEMPLATES -->
+    <div class="summary">
+      <div class="summary__data">
+        <h2>Summary</h2>
+        <div class="additional-summary prefix">
+        </div>
+        <p class="run-count">27 tests took 00:00:05.</p>
+        <p class="filter">(Un)check the boxes to filter the results.</p>
+        <div class="summary__reload">
+          <div class="summary__reload__button hidden" onclick="location.reload()">
+            <div>There are still tests running. <br />Reload this page to get the latest results!</div>
+          </div>
+        </div>
+        <div class="summary__spacer"></div>
+        <div class="controls">
+          <div class="filters">
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="failed" />
+            <span class="failed">1 Failed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="passed" />
+            <span class="passed">26 Passed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="skipped" disabled/>
+            <span class="skipped">0 Skipped,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xfailed" disabled/>
+            <span class="xfailed">0 Expected failures,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xpassed" disabled/>
+            <span class="xpassed">0 Unexpected passes,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="error" disabled/>
+            <span class="error">0 Errors,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="rerun" disabled/>
+            <span class="rerun">0 Reruns</span>
+          </div>
+          <div class="collapse">
+            <button id="show_all_details">Show all details</button>&nbsp;/&nbsp;<button id="hide_all_details">Hide all details</button>
+          </div>
+        </div>
+      </div>
+      <div class="additional-summary summary">
+      </div>
+      <div class="additional-summary postfix">
+      </div>
+    </div>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable" data-column-type="result">Result</th>
+          <th class="sortable" data-column-type="testId">Test</th>
+          <th class="sortable" data-column-type="duration">Duration</th>
+          <th>Links</th>
+        </tr>
+      </thead>
+    </table>
+  </body>
+  <footer>
+    <div id="data-container" data-jsonblob="{&#34;environment&#34;: {&#34;Python&#34;: &#34;3.10.12&#34;, &#34;Platform&#34;: &#34;Linux-5.15.0-143-generic-x86_64-with-glibc2.35&#34;, &#34;Packages&#34;: {&#34;pytest&#34;: &#34;8.4.1&#34;, &#34;pluggy&#34;: &#34;1.6.0&#34;}, &#34;Plugins&#34;: {&#34;metadata&#34;: &#34;3.1.1&#34;, &#34;html&#34;: &#34;4.1.1&#34;, &#34;cov&#34;: &#34;6.2.1&#34;, &#34;xdist&#34;: &#34;3.8.0&#34;, &#34;asyncio&#34;: &#34;1.0.0&#34;}}, &#34;tests&#34;: {&#34;test_coordination_framework.py::TestAgentRegistryIntegration::test_agent_discovery_and_selection&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestAgentRegistryIntegration::test_agent_discovery_and_selection&#34;, &#34;duration&#34;: &#34;1 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestAgentRegistryIntegration::test_agent_discovery_and_selection&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;1 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;No log output captured.&#34;}], &#34;test_coordination_framework.py::TestAgentRegistryIntegration::test_agent_health_monitoring&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestAgentRegistryIntegration::test_agent_health_monitoring&#34;, &#34;duration&#34;: &#34;1 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestAgentRegistryIntegration::test_agent_health_monitoring&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;1 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;No log output captured.&#34;}], &#34;test_coordination_framework.py::TestAgentRegistryIntegration::test_registry_statistics&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestAgentRegistryIntegration::test_registry_statistics&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestAgentRegistryIntegration::test_registry_statistics&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;No log output captured.&#34;}], &#34;test_coordination_framework.py::TestTaskDispatcherIntegration::test_intelligent_task_routing&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestTaskDispatcherIntegration::test_intelligent_task_routing&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestTaskDispatcherIntegration::test_intelligent_task_routing&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.task_dispatcher:Routing strategy changed to: round_robin\nINFO:managerQ.app.core.task_dispatcher:Dispatched task 2bc5b7fc-3314-47b0-8e44-46f202f994f6 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.task_dispatcher:Routing strategy changed to: least_loaded\nINFO:managerQ.app.core.task_dispatcher:Dispatched task b3ea5b56-2649-4025-be90-02f313adc369 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.task_dispatcher:Routing strategy changed to: priority_based\nINFO:managerQ.app.core.task_dispatcher:Dispatched task 9ee7a184-a8ed-4068-9f61-ff15cfc1d4a0 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.task_dispatcher:Routing strategy changed to: resource_aware\nINFO:managerQ.app.core.task_dispatcher:Dispatched task 37e65eac-82e1-4b34-ac42-507df57dcba5 to agent test_agent_0 (priority: high, queue_time: 0.00s)\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:457 Routing strategy changed to: round_robin\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task 2bc5b7fc-3314-47b0-8e44-46f202f994f6 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:457 Routing strategy changed to: least_loaded\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task b3ea5b56-2649-4025-be90-02f313adc369 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:457 Routing strategy changed to: priority_based\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task 9ee7a184-a8ed-4068-9f61-ff15cfc1d4a0 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:457 Routing strategy changed to: resource_aware\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task 37e65eac-82e1-4b34-ac42-507df57dcba5 to agent test_agent_0 (priority: high, queue_time: 0.00s)\n\n&#34;}], &#34;test_coordination_framework.py::TestTaskDispatcherIntegration::test_queue_management&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestTaskDispatcherIntegration::test_queue_management&#34;, &#34;duration&#34;: &#34;3 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestTaskDispatcherIntegration::test_queue_management&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;3 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.task_dispatcher:Task queue processor started\nINFO:managerQ.app.core.task_dispatcher:Queued task 6286e9e9-0710-4926-8245-532a65b7b8a8 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Dispatched task 69e54e37-72a0-43be-badc-2ea10d850613 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.task_dispatcher:Queued task c94c4486-c8ed-4692-8524-cfa528b57186 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Dispatched task c1af9ec6-5b77-4d5e-ae18-c889fd00f219 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.task_dispatcher:Queued task aa08091e-6827-4b07-a2e3-a3f3bf121aac with priority normal\nINFO:managerQ.app.core.task_dispatcher:Dispatched task f967ff40-d6f0-4a9e-a9d9-208ee66b49e2 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.task_dispatcher:Queued task 9106afdb-096a-4f6a-b8d9-ec3864715510 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Dispatched task a51158af-a209-4513-ba03-d871480960a9 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.task_dispatcher:Queued task 041811a3-2506-4cf7-801d-5eef6a15bdbe with priority normal\nINFO:managerQ.app.core.task_dispatcher:Dispatched task ba481c0e-24fb-4a0b-8986-333047979045 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.task_dispatcher:Task queue processor stopped\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:142 Task queue processor started\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 6286e9e9-0710-4926-8245-532a65b7b8a8 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task 69e54e37-72a0-43be-badc-2ea10d850613 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task c94c4486-c8ed-4692-8524-cfa528b57186 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task c1af9ec6-5b77-4d5e-ae18-c889fd00f219 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task aa08091e-6827-4b07-a2e3-a3f3bf121aac with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task f967ff40-d6f0-4a9e-a9d9-208ee66b49e2 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 9106afdb-096a-4f6a-b8d9-ec3864715510 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task a51158af-a209-4513-ba03-d871480960a9 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 041811a3-2506-4cf7-801d-5eef6a15bdbe with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task ba481c0e-24fb-4a0b-8986-333047979045 to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:147 Task queue processor stopped\n\n&#34;}], &#34;test_coordination_framework.py::TestTaskDispatcherIntegration::test_circuit_breaker_functionality&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestTaskDispatcherIntegration::test_circuit_breaker_functionality&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestTaskDispatcherIntegration::test_circuit_breaker_functionality&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nWARNING:managerQ.app.core.task_dispatcher:Recorded failure for agent test_agent_0, circuit breaker state: closed\nWARNING:managerQ.app.core.task_dispatcher:Recorded failure for agent test_agent_0, circuit breaker state: closed\nWARNING:managerQ.app.core.task_dispatcher:Recorded failure for agent test_agent_0, circuit breaker state: closed\nWARNING:managerQ.app.core.task_dispatcher:Recorded failure for agent test_agent_0, circuit breaker state: closed\nWARNING:managerQ.app.core.task_dispatcher:Recorded failure for agent test_agent_0, circuit breaker state: open\nWARNING:managerQ.app.core.task_dispatcher:Recorded failure for agent test_agent_0, circuit breaker state: open\n\n------------------------------ Captured log call -------------------------------\nWARNING  managerQ.app.core.task_dispatcher:task_dispatcher.py:433 Recorded failure for agent test_agent_0, circuit breaker state: closed\nWARNING  managerQ.app.core.task_dispatcher:task_dispatcher.py:433 Recorded failure for agent test_agent_0, circuit breaker state: closed\nWARNING  managerQ.app.core.task_dispatcher:task_dispatcher.py:433 Recorded failure for agent test_agent_0, circuit breaker state: closed\nWARNING  managerQ.app.core.task_dispatcher:task_dispatcher.py:433 Recorded failure for agent test_agent_0, circuit breaker state: closed\nWARNING  managerQ.app.core.task_dispatcher:task_dispatcher.py:433 Recorded failure for agent test_agent_0, circuit breaker state: open\nWARNING  managerQ.app.core.task_dispatcher:task_dispatcher.py:433 Recorded failure for agent test_agent_0, circuit breaker state: open\n\n&#34;}], &#34;test_coordination_framework.py::TestFailureHandlerIntegration::test_failure_detection_and_recovery&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestFailureHandlerIntegration::test_failure_detection_and_recovery&#34;, &#34;duration&#34;: &#34;103 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestFailureHandlerIntegration::test_failure_detection_and_recovery&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;103 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.failure_handler:Processing failure event: agent_timeout_1752187043472\nINFO:managerQ.app.core.failure_handler:Handling failure: agent_timeout - Agent became unresponsive\nINFO:managerQ.app.core.failure_handler:Circuit breaking agent test_agent_0\nINFO:managerQ.app.core.failure_handler:Recovery action circuit_break succeeded for agent_timeout_1752187043472\nINFO:managerQ.app.core.failure_handler:Successfully recovered from failure: agent_timeout_1752187043472\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.failure_handler:failure_handler.py:511 Processing failure event: agent_timeout_1752187043472\nINFO     managerQ.app.core.failure_handler:failure_handler.py:231 Handling failure: agent_timeout - Agent became unresponsive\nINFO     managerQ.app.core.failure_handler:failure_handler.py:378 Circuit breaking agent test_agent_0\nINFO     managerQ.app.core.failure_handler:failure_handler.py:304 Recovery action circuit_break succeeded for agent_timeout_1752187043472\nINFO     managerQ.app.core.failure_handler:failure_handler.py:262 Successfully recovered from failure: agent_timeout_1752187043472\n\n&#34;}], &#34;test_coordination_framework.py::TestFailureHandlerIntegration::test_escalation_procedures&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestFailureHandlerIntegration::test_escalation_procedures&#34;, &#34;duration&#34;: &#34;6 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestFailureHandlerIntegration::test_escalation_procedures&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;6 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.failure_handler:Processing failure event: test_escalation\nINFO:managerQ.app.core.failure_handler:Handling failure: resource_exhaustion - Critical resource exhaustion\nERROR:managerQ.app.core.failure_handler:Max recovery attempts exceeded for test_agent_0_resource_exhaustion\nCRITICAL:managerQ.app.core.failure_handler:ESCALATION: Recovery attempts exhausted for resource_exhaustion\nCRITICAL:managerQ.app.core.failure_handler:ADMIN NOTIFICATION: Critical failure - Critical resource exhaustion\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.failure_handler:failure_handler.py:511 Processing failure event: test_escalation\nINFO     managerQ.app.core.failure_handler:failure_handler.py:231 Handling failure: resource_exhaustion - Critical resource exhaustion\nERROR    managerQ.app.core.failure_handler:failure_handler.py:247 Max recovery attempts exceeded for test_agent_0_resource_exhaustion\nCRITICAL managerQ.app.core.failure_handler:failure_handler.py:416 ESCALATION: Recovery attempts exhausted for resource_exhaustion\nCRITICAL managerQ.app.core.failure_handler:failure_handler.py:388 ADMIN NOTIFICATION: Critical failure - Critical resource exhaustion\n\n&#34;}], &#34;test_coordination_framework.py::TestAgentCommunicationIntegration::test_direct_messaging&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestAgentCommunicationIntegration::test_direct_messaging&#34;, &#34;duration&#34;: &#34;6 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestAgentCommunicationIntegration::test_direct_messaging&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;6 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_1: Test coordination\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_1: Test coordination\n\n&#34;}], &#34;test_coordination_framework.py::TestAgentCommunicationIntegration::test_group_coordination&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestAgentCommunicationIntegration::test_group_coordination&#34;, &#34;duration&#34;: &#34;5 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestAgentCommunicationIntegration::test_group_coordination&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;5 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;---------------------------- Captured stderr setup -----------------------------\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-14&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\n\n------------------------------ Captured log setup ------------------------------\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-14&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\n\n----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.agent_communication:Created group &amp;#x27;Development Team&amp;#x27; with ID group_1c763ac9-5516-446c-a6b3-6992f90c594e\nINFO:managerQ.app.core.agent_communication:Added agent test_agent_1 to group group_1c763ac9-5516-446c-a6b3-6992f90c594e\nINFO:managerQ.app.core.agent_communication:Added agent test_agent_2 to group group_1c763ac9-5516-446c-a6b3-6992f90c594e\nINFO:managerQ.app.core.agent_communication:Added agent test_agent_3 to group group_1c763ac9-5516-446c-a6b3-6992f90c594e\nINFO:managerQ.app.core.agent_communication:Broadcast message sent from test_agent_0: Team coordination\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.agent_communication:agent_communication.py:271 Created group &amp;#x27;Development Team&amp;#x27; with ID group_1c763ac9-5516-446c-a6b3-6992f90c594e\nINFO     managerQ.app.core.agent_communication:agent_communication.py:286 Added agent test_agent_1 to group group_1c763ac9-5516-446c-a6b3-6992f90c594e\nINFO     managerQ.app.core.agent_communication:agent_communication.py:286 Added agent test_agent_2 to group group_1c763ac9-5516-446c-a6b3-6992f90c594e\nINFO     managerQ.app.core.agent_communication:agent_communication.py:286 Added agent test_agent_3 to group group_1c763ac9-5516-446c-a6b3-6992f90c594e\nINFO     managerQ.app.core.agent_communication:agent_communication.py:512 Broadcast message sent from test_agent_0: Team coordination\n\n&#34;}], &#34;test_coordination_framework.py::TestAgentCommunicationIntegration::test_service_discovery&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Failed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestAgentCommunicationIntegration::test_service_discovery&#34;, &#34;duration&#34;: &#34;3 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Failed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestAgentCommunicationIntegration::test_service_discovery&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;3 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;E   assert False\n     +  where False = &amp;lt;managerQ.app.core.agent_communication.AgentCommunicationHub object at 0x7f2dae137d00&amp;gt;._running\n&#34;}], &#34;test_coordination_framework.py::TestCoordinationProtocolsIntegration::test_consensus_operations&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestCoordinationProtocolsIntegration::test_consensus_operations&#34;, &#34;duration&#34;: &#34;3 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestCoordinationProtocolsIntegration::test_consensus_operations&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;3 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;---------------------------- Captured stderr setup -----------------------------\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-17&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-18&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-19&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\n\n------------------------------ Captured log setup ------------------------------\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-17&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-18&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-19&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\n\n----------------------------- Captured stderr call -----------------------------\nWARNING:managerQ.app.core.coordination_protocols:Node test_node is not leader, cannot coordinate task test_coordination\n\n------------------------------ Captured log call -------------------------------\nWARNING  managerQ.app.core.coordination_protocols:coordination_protocols.py:734 Node test_node is not leader, cannot coordinate task test_coordination\n\n&#34;}], &#34;test_coordination_framework.py::TestCoordinationProtocolsIntegration::test_distributed_locks&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestCoordinationProtocolsIntegration::test_distributed_locks&#34;, &#34;duration&#34;: &#34;3 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestCoordinationProtocolsIntegration::test_distributed_locks&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;3 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.agent_communication:Broadcast message sent from test_node: lock_acquired\nINFO:managerQ.app.core.coordination_protocols:Node test_node acquired lock on test_resource\nINFO:managerQ.app.core.agent_communication:Broadcast message sent from test_node: lock_released\nINFO:managerQ.app.core.coordination_protocols:Node test_node released lock on test_resource\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.agent_communication:agent_communication.py:512 Broadcast message sent from test_node: lock_acquired\nINFO     managerQ.app.core.coordination_protocols:coordination_protocols.py:501 Node test_node acquired lock on test_resource\nINFO     managerQ.app.core.agent_communication:agent_communication.py:512 Broadcast message sent from test_node: lock_released\nINFO     managerQ.app.core.coordination_protocols:coordination_protocols.py:529 Node test_node released lock on test_resource\n\n&#34;}], &#34;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_metrics_collection&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_metrics_collection&#34;, &#34;duration&#34;: &#34;3 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_metrics_collection&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;3 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-26&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-27&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-28&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-29&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-30&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-31&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-32&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-33&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-34&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-35&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\n\n------------------------------ Captured log call -------------------------------\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-26&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-27&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-28&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-29&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-30&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-31&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-32&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-33&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-34&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-35&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\n\n&#34;}], &#34;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_alert_generation&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_alert_generation&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_alert_generation&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;No log output captured.&#34;}], &#34;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_performance_insights&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_performance_insights&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestPerformanceMonitoringIntegration::test_performance_insights&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;No log output captured.&#34;}], &#34;test_coordination_framework.py::TestPredictiveAutoscalerIntegration::test_scaling_decision_making&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestPredictiveAutoscalerIntegration::test_scaling_decision_making&#34;, &#34;duration&#34;: &#34;3 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestPredictiveAutoscalerIntegration::test_scaling_decision_making&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;3 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.predictive_autoscaler:Scaling strategy changed to: reactive\nINFO:managerQ.app.core.predictive_autoscaler:Scaling strategy changed to: predictive\nINFO:managerQ.app.core.predictive_autoscaler:Scaling strategy changed to: hybrid\nINFO:managerQ.app.core.predictive_autoscaler:Scaling strategy changed to: cost_optimized\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.predictive_autoscaler:predictive_autoscaler.py:715 Scaling strategy changed to: reactive\nINFO     managerQ.app.core.predictive_autoscaler:predictive_autoscaler.py:715 Scaling strategy changed to: predictive\nINFO     managerQ.app.core.predictive_autoscaler:predictive_autoscaler.py:715 Scaling strategy changed to: hybrid\nINFO     managerQ.app.core.predictive_autoscaler:predictive_autoscaler.py:715 Scaling strategy changed to: cost_optimized\n\n&#34;}], &#34;test_coordination_framework.py::TestPredictiveAutoscalerIntegration::test_workload_prediction&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestPredictiveAutoscalerIntegration::test_workload_prediction&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestPredictiveAutoscalerIntegration::test_workload_prediction&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;No log output captured.&#34;}], &#34;test_coordination_framework.py::TestEndToEndWorkflows::test_complete_task_coordination_workflow&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestEndToEndWorkflows::test_complete_task_coordination_workflow&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestEndToEndWorkflows::test_complete_task_coordination_workflow&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.task_dispatcher:Dispatched task ef59db59-f83c-4846-b3df-c0f9ac53916f to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO:managerQ.app.core.agent_communication:Created group &amp;#x27;Task Coordination Group&amp;#x27; with ID group_8d56735b-a61f-4560-832a-8ded8fa0af50\nWARNING:managerQ.app.core.coordination_protocols:Node test_node is not leader, cannot coordinate task ef59db59-f83c-4846-b3df-c0f9ac53916f\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:386 Dispatched task ef59db59-f83c-4846-b3df-c0f9ac53916f to agent test_agent_0 (priority: high, queue_time: 0.00s)\nINFO     managerQ.app.core.agent_communication:agent_communication.py:271 Created group &amp;#x27;Task Coordination Group&amp;#x27; with ID group_8d56735b-a61f-4560-832a-8ded8fa0af50\nWARNING  managerQ.app.core.coordination_protocols:coordination_protocols.py:734 Node test_node is not leader, cannot coordinate task ef59db59-f83c-4846-b3df-c0f9ac53916f\n\n&#34;}], &#34;test_coordination_framework.py::TestEndToEndWorkflows::test_failure_recovery_workflow&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestEndToEndWorkflows::test_failure_recovery_workflow&#34;, &#34;duration&#34;: &#34;103 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestEndToEndWorkflows::test_failure_recovery_workflow&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;103 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.failure_handler:Processing failure event: resource_exhaustion_1752187043626\nINFO:managerQ.app.core.failure_handler:Handling failure: resource_exhaustion - Agent resource exhaustion\nINFO:managerQ.app.core.failure_handler:Scaling up agents due to resource exhaustion\nINFO:managerQ.app.core.failure_handler:Recovery action scale_up succeeded for resource_exhaustion_1752187043626\nINFO:managerQ.app.core.failure_handler:Successfully recovered from failure: resource_exhaustion_1752187043626\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.failure_handler:failure_handler.py:511 Processing failure event: resource_exhaustion_1752187043626\nINFO     managerQ.app.core.failure_handler:failure_handler.py:231 Handling failure: resource_exhaustion - Agent resource exhaustion\nINFO     managerQ.app.core.failure_handler:failure_handler.py:365 Scaling up agents due to resource exhaustion\nINFO     managerQ.app.core.failure_handler:failure_handler.py:304 Recovery action scale_up succeeded for resource_exhaustion_1752187043626\nINFO     managerQ.app.core.failure_handler:failure_handler.py:262 Successfully recovered from failure: resource_exhaustion_1752187043626\n\n&#34;}], &#34;test_coordination_framework.py::TestEndToEndWorkflows::test_scaling_response_workflow&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestEndToEndWorkflows::test_scaling_response_workflow&#34;, &#34;duration&#34;: &#34;5 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestEndToEndWorkflows::test_scaling_response_workflow&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;5 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;No log output captured.&#34;}], &#34;test_coordination_framework.py::TestLoadAndStressScenarios::test_high_task_volume&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestLoadAndStressScenarios::test_high_task_volume&#34;, &#34;duration&#34;: &#34;10 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestLoadAndStressScenarios::test_high_task_volume&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;10 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.task_dispatcher:Task queue processor started\nINFO:managerQ.app.core.task_dispatcher:Queued task 27e08d16-4a87-4131-8c41-f467ec46f45d with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task f62f85c4-a90b-435d-9ef9-94f714826a96 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 9b1585a8-d1e9-4888-8650-b73e71e3e5cd with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 3bdb6baa-ec0d-4ace-adab-3f59627d77eb with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task be12448c-5921-437b-8c6d-1b031e8868f1 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 8a6f89ae-9bee-42cb-8589-3e5659287929 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 45b0ec44-4225-4e7c-a03b-9630731c870f with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 0d589c9c-cdef-4271-a75d-2bc148d00d91 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 513ea269-d26a-42c4-9046-abe1cfd60af1 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 5df843bb-76fb-457a-a6a6-5d40163d3991 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 44809118-9987-4b98-b599-261b96f5b627 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 5d232fdb-f6d8-4911-bae0-e08ed3457747 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 7d1553b3-aa80-4757-870b-19f801218e4d with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 4a865afb-be36-4c79-a8b2-1441d6cc32b6 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 5c506a62-420f-4194-95ae-5bdb4e877ee3 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task c4dd3582-26b3-449d-803b-3ee8921003b6 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 54a5b709-9a62-4455-9ac9-6ca52b046457 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 49b6695f-93df-4dd5-8150-eb883184c831 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 4e08ece7-3948-41d0-a0ef-ce6b2c1ae2a6 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 3e970ef6-28be-4898-b436-9de566726ee3 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task d6207feb-91dd-4bcf-9c9d-cca83b11a92c with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task a4c4b78b-19a6-4885-ba71-18e26104f83b with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 445fd0cf-58c2-4c0e-8992-d05715663e59 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 1d79d81a-d077-40a9-896b-9129821b4a1a with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task a9c6a6db-c7f0-4327-af93-a34563ae5391 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 93f31741-07ab-4982-bf47-17a2ab6277c4 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task f9acb891-37bd-4b3c-9816-c6bed41f4158 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 126d8503-eabd-4030-a0ba-cbca8ae1b533 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 047ce8f3-a146-4fc1-8706-fd6cf4706da4 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 80d808d6-b4bd-4089-91e5-9b802dc3734c with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task fe40dab0-1ade-4e04-9463-f68f4fd7a9c7 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 255cb091-e784-41b1-9ee6-768a9b453a71 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task ea10cbe7-829e-4e59-a340-f9a7ea39c644 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 74abe94a-6b13-4868-8b61-a6362b06cce7 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 81f53cf5-c672-49ab-a5ea-0268ebfdb685 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task a9bdd4f8-9236-4be6-94c2-462041cac100 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 9d2294a0-5967-4ef6-9120-e9d83241e427 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task d428fe66-369e-427c-a45a-eedd07660803 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 41765649-3593-40b1-a516-7c35f619727c with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 63007668-9834-4629-b798-9c696cb2c039 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 3c359064-fa95-44c1-ba83-2257fa8a8ae3 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task c30e8f56-2706-4a22-b5c3-d967a7db84c6 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 76fe41e2-89aa-43b4-8801-2154f70c5446 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task a3e2b0f4-eb48-49fd-8e91-c44ee946dcf1 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 6bc223ad-66eb-4d7a-8ae1-821a33682b34 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 287c0d83-d929-4f8a-b3f2-e7bcb2a90f49 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 8232029b-32c5-40d8-8a4f-1847e5d7698c with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 199b833f-d924-4e2a-af49-8ad05dd77907 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 011e6233-edbe-45ef-9030-c07f4983143f with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 0f9d2ed1-832b-4a4b-b10e-8dc85b321acd with priority normal\nINFO:managerQ.app.core.task_dispatcher:Task queue processor stopped\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:142 Task queue processor started\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 27e08d16-4a87-4131-8c41-f467ec46f45d with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task f62f85c4-a90b-435d-9ef9-94f714826a96 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 9b1585a8-d1e9-4888-8650-b73e71e3e5cd with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 3bdb6baa-ec0d-4ace-adab-3f59627d77eb with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task be12448c-5921-437b-8c6d-1b031e8868f1 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 8a6f89ae-9bee-42cb-8589-3e5659287929 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 45b0ec44-4225-4e7c-a03b-9630731c870f with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 0d589c9c-cdef-4271-a75d-2bc148d00d91 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 513ea269-d26a-42c4-9046-abe1cfd60af1 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 5df843bb-76fb-457a-a6a6-5d40163d3991 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 44809118-9987-4b98-b599-261b96f5b627 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 5d232fdb-f6d8-4911-bae0-e08ed3457747 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 7d1553b3-aa80-4757-870b-19f801218e4d with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 4a865afb-be36-4c79-a8b2-1441d6cc32b6 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 5c506a62-420f-4194-95ae-5bdb4e877ee3 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task c4dd3582-26b3-449d-803b-3ee8921003b6 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 54a5b709-9a62-4455-9ac9-6ca52b046457 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 49b6695f-93df-4dd5-8150-eb883184c831 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 4e08ece7-3948-41d0-a0ef-ce6b2c1ae2a6 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 3e970ef6-28be-4898-b436-9de566726ee3 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task d6207feb-91dd-4bcf-9c9d-cca83b11a92c with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task a4c4b78b-19a6-4885-ba71-18e26104f83b with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 445fd0cf-58c2-4c0e-8992-d05715663e59 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 1d79d81a-d077-40a9-896b-9129821b4a1a with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task a9c6a6db-c7f0-4327-af93-a34563ae5391 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 93f31741-07ab-4982-bf47-17a2ab6277c4 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task f9acb891-37bd-4b3c-9816-c6bed41f4158 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 126d8503-eabd-4030-a0ba-cbca8ae1b533 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 047ce8f3-a146-4fc1-8706-fd6cf4706da4 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 80d808d6-b4bd-4089-91e5-9b802dc3734c with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task fe40dab0-1ade-4e04-9463-f68f4fd7a9c7 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 255cb091-e784-41b1-9ee6-768a9b453a71 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task ea10cbe7-829e-4e59-a340-f9a7ea39c644 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 74abe94a-6b13-4868-8b61-a6362b06cce7 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 81f53cf5-c672-49ab-a5ea-0268ebfdb685 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task a9bdd4f8-9236-4be6-94c2-462041cac100 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 9d2294a0-5967-4ef6-9120-e9d83241e427 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task d428fe66-369e-427c-a45a-eedd07660803 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 41765649-3593-40b1-a516-7c35f619727c with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 63007668-9834-4629-b798-9c696cb2c039 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 3c359064-fa95-44c1-ba83-2257fa8a8ae3 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task c30e8f56-2706-4a22-b5c3-d967a7db84c6 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 76fe41e2-89aa-43b4-8801-2154f70c5446 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task a3e2b0f4-eb48-49fd-8e91-c44ee946dcf1 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 6bc223ad-66eb-4d7a-8ae1-821a33682b34 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 287c0d83-d929-4f8a-b3f2-e7bcb2a90f49 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 8232029b-32c5-40d8-8a4f-1847e5d7698c with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 199b833f-d924-4e2a-af49-8ad05dd77907 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 011e6233-edbe-45ef-9030-c07f4983143f with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 0f9d2ed1-832b-4a4b-b10e-8dc85b321acd with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:147 Task queue processor stopped\n\n&#34;}], &#34;test_coordination_framework.py::TestLoadAndStressScenarios::test_agent_churn&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestLoadAndStressScenarios::test_agent_churn&#34;, &#34;duration&#34;: &#34;3 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestLoadAndStressScenarios::test_agent_churn&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;3 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;No log output captured.&#34;}], &#34;test_coordination_framework.py::TestLoadAndStressScenarios::test_communication_overload&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestLoadAndStressScenarios::test_communication_overload&#34;, &#34;duration&#34;: &#34;5 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestLoadAndStressScenarios::test_communication_overload&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;5 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_1: Load test message 0\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_2: Load test message 1\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_3: Load test message 2\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_4: Load test message 3\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_1: Load test message 4\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_2: Load test message 5\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_3: Load test message 6\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_4: Load test message 7\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_1: Load test message 8\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_2: Load test message 9\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_3: Load test message 10\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_4: Load test message 11\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_1: Load test message 12\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_2: Load test message 13\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_3: Load test message 14\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_4: Load test message 15\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_1: Load test message 16\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_2: Load test message 17\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_3: Load test message 18\nINFO:managerQ.app.core.agent_communication:Direct message sent from test_agent_0 to test_agent_4: Load test message 19\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_1: Load test message 0\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_2: Load test message 1\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_3: Load test message 2\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_4: Load test message 3\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_1: Load test message 4\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_2: Load test message 5\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_3: Load test message 6\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_4: Load test message 7\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_1: Load test message 8\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_2: Load test message 9\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_3: Load test message 10\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_4: Load test message 11\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_1: Load test message 12\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_2: Load test message 13\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_3: Load test message 14\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_4: Load test message 15\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_1: Load test message 16\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_2: Load test message 17\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_3: Load test message 18\nINFO     managerQ.app.core.agent_communication:agent_communication.py:474 Direct message sent from test_agent_0 to test_agent_4: Load test message 19\n\n&#34;}], &#34;test_coordination_framework.py::TestPerformanceBenchmarks::test_agent_selection_performance&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestPerformanceBenchmarks::test_agent_selection_performance&#34;, &#34;duration&#34;: &#34;3 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestPerformanceBenchmarks::test_agent_selection_performance&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;3 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:test_coordination_framework:Agent selection performance: 0.01ms average\n\n------------------------------ Captured log call -------------------------------\nINFO     test_coordination_framework:test_coordination_framework.py:749 Agent selection performance: 0.01ms average\n\n&#34;}], &#34;test_coordination_framework.py::TestPerformanceBenchmarks::test_metrics_collection_performance&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::TestPerformanceBenchmarks::test_metrics_collection_performance&#34;, &#34;duration&#34;: &#34;5 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::TestPerformanceBenchmarks::test_metrics_collection_performance&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;5 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-69&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-70&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-71&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-72&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-73&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-74&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-75&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-76&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-77&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-78&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR:asyncio:Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-79&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nINFO:test_coordination_framework:Metrics collection performance: 0ms average\n\n------------------------------ Captured log call -------------------------------\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-69&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-70&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-71&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-72&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-73&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-74&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-75&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-76&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-77&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-78&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nERROR    asyncio:base_events.py:1758 Task was destroyed but it is pending!\ntask: &amp;lt;Task pending name=&amp;#x27;Task-79&amp;#x27; coro=&amp;lt;MessageDeliveryService._wait_for_confirmation() done, defined at /home/m/Q2/Q2/managerQ/app/core/agent_communication.py:221&amp;gt; wait_for=&amp;lt;Future pending cb=[Task.task_wakeup()]&amp;gt;&amp;gt;\nINFO     test_coordination_framework:test_coordination_framework.py:769 Metrics collection performance: 0ms average\n\n&#34;}], &#34;test_coordination_framework.py::test_full_system_integration&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;test_coordination_framework.py::test_full_system_integration&#34;, &#34;duration&#34;: &#34;00:00:05&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;test_coordination_framework.py::test_full_system_integration&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:00:05&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nINFO:managerQ.app.core.task_dispatcher:Task queue processor started\nINFO:managerQ.app.core.task_dispatcher:Queued task 73234d11-27d0-4022-9801-a5743237634c with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 3218c112-e3fa-4425-bc80-866abf46ccaf with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 8bcdc0ea-ea8d-4056-a355-605bb7b8e0f6 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task bb823539-c907-4176-837d-2957f696bd2b with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 589775c3-cbfa-4579-8ece-dd81251b78bd with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 3400886b-6a07-47c9-b709-dff8c7f718a8 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task daf32584-4681-4bee-bb49-e295576cdc5f with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task dd6e730d-b49a-4294-a995-1ceca013d971 with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 1ad643d9-1274-4e98-98d8-7d88c12a879d with priority normal\nINFO:managerQ.app.core.task_dispatcher:Queued task 8e929c89-ae00-4a87-aca4-7afbdf11a0f9 with priority normal\nINFO:managerQ.app.core.agent_communication:Broadcast message sent from test_agent_0: System integration test\nINFO:managerQ.app.core.task_dispatcher:Task queue processor stopped\nINFO:test_coordination_framework:Full system integration test completed successfully\n\n------------------------------ Captured log call -------------------------------\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:142 Task queue processor started\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 73234d11-27d0-4022-9801-a5743237634c with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 3218c112-e3fa-4425-bc80-866abf46ccaf with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 8bcdc0ea-ea8d-4056-a355-605bb7b8e0f6 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task bb823539-c907-4176-837d-2957f696bd2b with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 589775c3-cbfa-4579-8ece-dd81251b78bd with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 3400886b-6a07-47c9-b709-dff8c7f718a8 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task daf32584-4681-4bee-bb49-e295576cdc5f with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task dd6e730d-b49a-4294-a995-1ceca013d971 with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 1ad643d9-1274-4e98-98d8-7d88c12a879d with priority normal\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:192 Queued task 8e929c89-ae00-4a87-aca4-7afbdf11a0f9 with priority normal\nINFO     managerQ.app.core.agent_communication:agent_communication.py:512 Broadcast message sent from test_agent_0: System integration test\nINFO     managerQ.app.core.task_dispatcher:task_dispatcher.py:147 Task queue processor stopped\nINFO     test_coordination_framework:test_coordination_framework.py:843 Full system integration test completed successfully\n\n&#34;}]}, &#34;renderCollapsed&#34;: [&#34;passed&#34;], &#34;initialSort&#34;: &#34;result&#34;, &#34;title&#34;: &#34;test_report.html&#34;}"></div>
+    <script>
+      (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+const { getCollapsedCategory, setCollapsedIds } = require('./storage.js')
+
+class DataManager {
+    setManager(data) {
+        const collapsedCategories = [...getCollapsedCategory(data.renderCollapsed)]
+        const collapsedIds = []
+        const tests = Object.values(data.tests).flat().map((test, index) => {
+            const collapsed = collapsedCategories.includes(test.result.toLowerCase())
+            const id = `test_${index}`
+            if (collapsed) {
+                collapsedIds.push(id)
+            }
+            return {
+                ...test,
+                id,
+                collapsed,
+            }
+        })
+        const dataBlob = { ...data, tests }
+        this.data = { ...dataBlob }
+        this.renderData = { ...dataBlob }
+        setCollapsedIds(collapsedIds)
+    }
+
+    get allData() {
+        return { ...this.data }
+    }
+
+    resetRender() {
+        this.renderData = { ...this.data }
+    }
+
+    setRender(data) {
+        this.renderData.tests = [...data]
+    }
+
+    toggleCollapsedItem(id) {
+        this.renderData.tests = this.renderData.tests.map((test) =>
+            test.id === id ? { ...test, collapsed: !test.collapsed } : test,
+        )
+    }
+
+    set allCollapsed(collapsed) {
+        this.renderData = { ...this.renderData, tests: [...this.renderData.tests.map((test) => (
+            { ...test, collapsed }
+        ))] }
+    }
+
+    get testSubset() {
+        return [...this.renderData.tests]
+    }
+
+    get environment() {
+        return this.renderData.environment
+    }
+
+    get initialSort() {
+        return this.data.initialSort
+    }
+}
+
+module.exports = {
+    manager: new DataManager(),
+}
+
+},{"./storage.js":8}],2:[function(require,module,exports){
+const mediaViewer = require('./mediaviewer.js')
+const templateEnvRow = document.getElementById('template_environment_row')
+const templateResult = document.getElementById('template_results-table__tbody')
+
+function htmlToElements(html) {
+    const temp = document.createElement('template')
+    temp.innerHTML = html
+    return temp.content.childNodes
+}
+
+const find = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return elem.querySelector(selector)
+}
+
+const findAll = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return [...elem.querySelectorAll(selector)]
+}
+
+const dom = {
+    getStaticRow: (key, value) => {
+        const envRow = templateEnvRow.content.cloneNode(true)
+        const isObj = typeof value === 'object' && value !== null
+        const values = isObj ? Object.keys(value).map((k) => `${k}: ${value[k]}`) : null
+
+        const valuesElement = htmlToElements(
+            values ? `<ul>${values.map((val) => `<li>${val}</li>`).join('')}<ul>` : `<div>${value}</div>`)[0]
+        const td = findAll('td', envRow)
+        td[0].textContent = key
+        td[1].appendChild(valuesElement)
+
+        return envRow
+    },
+    getResultTBody: ({ testId, id, log, extras, resultsTableRow, tableHtml, result, collapsed }) => {
+        const resultBody = templateResult.content.cloneNode(true)
+        resultBody.querySelector('tbody').classList.add(result.toLowerCase())
+        resultBody.querySelector('tbody').id = testId
+        resultBody.querySelector('.collapsible').dataset.id = id
+
+        resultsTableRow.forEach((html) => {
+            const t = document.createElement('template')
+            t.innerHTML = html
+            resultBody.querySelector('.collapsible').appendChild(t.content)
+        })
+
+        if (log) {
+            // Wrap lines starting with "E" with span.error to color those lines red
+            const wrappedLog = log.replace(/^E.*$/gm, (match) => `<span class="error">${match}</span>`)
+            resultBody.querySelector('.log').innerHTML = wrappedLog
+        } else {
+            resultBody.querySelector('.log').remove()
+        }
+
+        if (collapsed) {
+            resultBody.querySelector('.collapsible > td')?.classList.add('collapsed')
+            resultBody.querySelector('.extras-row').classList.add('hidden')
+        } else {
+            resultBody.querySelector('.collapsible > td')?.classList.remove('collapsed')
+        }
+
+        const media = []
+        extras?.forEach(({ name, format_type, content }) => {
+            if (['image', 'video'].includes(format_type)) {
+                media.push({ path: content, name, format_type })
+            }
+
+            if (format_type === 'html') {
+                resultBody.querySelector('.extraHTML').insertAdjacentHTML('beforeend', `<div>${content}</div>`)
+            }
+        })
+        mediaViewer.setup(resultBody, media)
+
+        // Add custom html from the pytest_html_results_table_html hook
+        tableHtml?.forEach((item) => {
+            resultBody.querySelector('td[class="extra"]').insertAdjacentHTML('beforeend', item)
+        })
+
+        return resultBody
+    },
+}
+
+module.exports = {
+    dom,
+    htmlToElements,
+    find,
+    findAll,
+}
+
+},{"./mediaviewer.js":6}],3:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const storageModule = require('./storage.js')
+
+const getFilteredSubSet = (filter) =>
+    manager.allData.tests.filter(({ result }) => filter.includes(result.toLowerCase()))
+
+const doInitFilter = () => {
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+}
+
+const doFilter = (type, show) => {
+    if (show) {
+        storageModule.showCategory(type)
+    } else {
+        storageModule.hideCategory(type)
+    }
+
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+
+    const sortColumn = storageModule.getSort()
+    doSort(sortColumn, true)
+}
+
+module.exports = {
+    doFilter,
+    doInitFilter,
+}
+
+},{"./datamanager.js":1,"./sort.js":7,"./storage.js":8}],4:[function(require,module,exports){
+const { redraw, bindEvents, renderStatic } = require('./main.js')
+const { doInitFilter } = require('./filter.js')
+const { doInitSort } = require('./sort.js')
+const { manager } = require('./datamanager.js')
+const data = JSON.parse(document.getElementById('data-container').dataset.jsonblob)
+
+function init() {
+    manager.setManager(data)
+    doInitFilter()
+    doInitSort()
+    renderStatic()
+    redraw()
+    bindEvents()
+}
+
+init()
+
+},{"./datamanager.js":1,"./filter.js":3,"./main.js":5,"./sort.js":7}],5:[function(require,module,exports){
+const { dom, find, findAll } = require('./dom.js')
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const { doFilter } = require('./filter.js')
+const {
+    getVisible,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    getSortDirection,
+    possibleFilters,
+} = require('./storage.js')
+
+const removeChildren = (node) => {
+    while (node.firstChild) {
+        node.removeChild(node.firstChild)
+    }
+}
+
+const renderStatic = () => {
+    const renderEnvironmentTable = () => {
+        const environment = manager.environment
+        const rows = Object.keys(environment).map((key) => dom.getStaticRow(key, environment[key]))
+        const table = document.getElementById('environment')
+        removeChildren(table)
+        rows.forEach((row) => table.appendChild(row))
+    }
+    renderEnvironmentTable()
+}
+
+const addItemToggleListener = (elem) => {
+    elem.addEventListener('click', ({ target }) => {
+        const id = target.parentElement.dataset.id
+        manager.toggleCollapsedItem(id)
+
+        const collapsedIds = getCollapsedIds()
+        if (collapsedIds.includes(id)) {
+            const updated = collapsedIds.filter((item) => item !== id)
+            setCollapsedIds(updated)
+        } else {
+            collapsedIds.push(id)
+            setCollapsedIds(collapsedIds)
+        }
+        redraw()
+    })
+}
+
+const renderContent = (tests) => {
+    const sortAttr = getSort(manager.initialSort)
+    const sortAsc = JSON.parse(getSortDirection())
+    const rows = tests.map(dom.getResultTBody)
+    const table = document.getElementById('results-table')
+    const tableHeader = document.getElementById('results-table-head')
+
+    const newTable = document.createElement('table')
+    newTable.id = 'results-table'
+
+    // remove all sorting classes and set the relevant
+    findAll('.sortable', tableHeader).forEach((elem) => elem.classList.remove('asc', 'desc'))
+    tableHeader.querySelector(`.sortable[data-column-type="${sortAttr}"]`)?.classList.add(sortAsc ? 'desc' : 'asc')
+    newTable.appendChild(tableHeader)
+
+    if (!rows.length) {
+        const emptyTable = document.getElementById('template_results-table__body--empty').content.cloneNode(true)
+        newTable.appendChild(emptyTable)
+    } else {
+        rows.forEach((row) => {
+            if (!!row) {
+                findAll('.collapsible td:not(.col-links', row).forEach(addItemToggleListener)
+                find('.logexpander', row).addEventListener('click',
+                    (evt) => evt.target.parentNode.classList.toggle('expanded'),
+                )
+                newTable.appendChild(row)
+            }
+        })
+    }
+
+    table.replaceWith(newTable)
+}
+
+const renderDerived = () => {
+    const currentFilter = getVisible()
+    possibleFilters.forEach((result) => {
+        const input = document.querySelector(`input[data-test-result="${result}"]`)
+        input.checked = currentFilter.includes(result)
+    })
+}
+
+const bindEvents = () => {
+    const filterColumn = (evt) => {
+        const { target: element } = evt
+        const { testResult } = element.dataset
+
+        doFilter(testResult, element.checked)
+        const collapsedIds = getCollapsedIds()
+        const updated = manager.renderData.tests.map((test) => {
+            return {
+                ...test,
+                collapsed: collapsedIds.includes(test.id),
+            }
+        })
+        manager.setRender(updated)
+        redraw()
+    }
+
+    const header = document.getElementById('environment-header')
+    header.addEventListener('click', () => {
+        const table = document.getElementById('environment')
+        table.classList.toggle('hidden')
+        header.classList.toggle('collapsed')
+    })
+
+    findAll('input[name="filter_checkbox"]').forEach((elem) => {
+        elem.addEventListener('click', filterColumn)
+    })
+
+    findAll('.sortable').forEach((elem) => {
+        elem.addEventListener('click', (evt) => {
+            const { target: element } = evt
+            const { columnType } = element.dataset
+            doSort(columnType)
+            redraw()
+        })
+    })
+
+    document.getElementById('show_all_details').addEventListener('click', () => {
+        manager.allCollapsed = false
+        setCollapsedIds([])
+        redraw()
+    })
+    document.getElementById('hide_all_details').addEventListener('click', () => {
+        manager.allCollapsed = true
+        const allIds = manager.renderData.tests.map((test) => test.id)
+        setCollapsedIds(allIds)
+        redraw()
+    })
+}
+
+const redraw = () => {
+    const { testSubset } = manager
+
+    renderContent(testSubset)
+    renderDerived()
+}
+
+module.exports = {
+    redraw,
+    bindEvents,
+    renderStatic,
+}
+
+},{"./datamanager.js":1,"./dom.js":2,"./filter.js":3,"./sort.js":7,"./storage.js":8}],6:[function(require,module,exports){
+class MediaViewer {
+    constructor(assets) {
+        this.assets = assets
+        this.index = 0
+    }
+
+    nextActive() {
+        this.index = this.index === this.assets.length - 1 ? 0 : this.index + 1
+        return [this.activeFile, this.index]
+    }
+
+    prevActive() {
+        this.index = this.index === 0 ? this.assets.length - 1 : this.index -1
+        return [this.activeFile, this.index]
+    }
+
+    get currentIndex() {
+        return this.index
+    }
+
+    get activeFile() {
+        return this.assets[this.index]
+    }
+}
+
+
+const setup = (resultBody, assets) => {
+    if (!assets.length) {
+        resultBody.querySelector('.media').classList.add('hidden')
+        return
+    }
+
+    const mediaViewer = new MediaViewer(assets)
+    const container = resultBody.querySelector('.media-container')
+    const leftArrow = resultBody.querySelector('.media-container__nav--left')
+    const rightArrow = resultBody.querySelector('.media-container__nav--right')
+    const mediaName = resultBody.querySelector('.media__name')
+    const counter = resultBody.querySelector('.media__counter')
+    const imageEl = resultBody.querySelector('img')
+    const sourceEl = resultBody.querySelector('source')
+    const videoEl = resultBody.querySelector('video')
+
+    const setImg = (media, index) => {
+        if (media?.format_type === 'image') {
+            imageEl.src = media.path
+
+            imageEl.classList.remove('hidden')
+            videoEl.classList.add('hidden')
+        } else if (media?.format_type === 'video') {
+            sourceEl.src = media.path
+
+            videoEl.classList.remove('hidden')
+            imageEl.classList.add('hidden')
+        }
+
+        mediaName.innerText = media?.name
+        counter.innerText = `${index + 1} / ${assets.length}`
+    }
+    setImg(mediaViewer.activeFile, mediaViewer.currentIndex)
+
+    const moveLeft = () => {
+        const [media, index] = mediaViewer.prevActive()
+        setImg(media, index)
+    }
+    const doRight = () => {
+        const [media, index] = mediaViewer.nextActive()
+        setImg(media, index)
+    }
+    const openImg = () => {
+        window.open(mediaViewer.activeFile.path, '_blank')
+    }
+    if (assets.length === 1) {
+        container.classList.add('media-container--fullscreen')
+    } else {
+        leftArrow.addEventListener('click', moveLeft)
+        rightArrow.addEventListener('click', doRight)
+    }
+    imageEl.addEventListener('click', openImg)
+}
+
+module.exports = {
+    setup,
+}
+
+},{}],7:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const storageModule = require('./storage.js')
+
+const genericSort = (list, key, ascending, customOrder) => {
+    let sorted
+    if (customOrder) {
+        sorted = list.sort((a, b) => {
+            const aValue = a.result.toLowerCase()
+            const bValue = b.result.toLowerCase()
+
+            const aIndex = customOrder.findIndex((item) => item.toLowerCase() === aValue)
+            const bIndex = customOrder.findIndex((item) => item.toLowerCase() === bValue)
+
+            // Compare the indices to determine the sort order
+            return aIndex - bIndex
+        })
+    } else {
+        sorted = list.sort((a, b) => a[key] === b[key] ? 0 : a[key] > b[key] ? 1 : -1)
+    }
+
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const durationSort = (list, ascending) => {
+    const parseDuration = (duration) => {
+        if (duration.includes(':')) {
+            // If it's in the format "HH:mm:ss"
+            const [hours, minutes, seconds] = duration.split(':').map(Number)
+            return (hours * 3600 + minutes * 60 + seconds) * 1000
+        } else {
+            // If it's in the format "nnn ms"
+            return parseInt(duration)
+        }
+    }
+    const sorted = list.sort((a, b) => parseDuration(a['duration']) - parseDuration(b['duration']))
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const doInitSort = () => {
+    const type = storageModule.getSort(manager.initialSort)
+    const ascending = storageModule.getSortDirection()
+    const list = manager.testSubset
+    const initialOrder = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed', 'Skipped', 'Passed']
+
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    if (type?.toLowerCase() === 'original') {
+        manager.setRender(list)
+    } else {
+        let sortedList
+        switch (type) {
+        case 'duration':
+            sortedList = durationSort(list, ascending)
+            break
+        case 'result':
+            sortedList = genericSort(list, type, ascending, initialOrder)
+            break
+        default:
+            sortedList = genericSort(list, type, ascending)
+            break
+        }
+        manager.setRender(sortedList)
+    }
+}
+
+const doSort = (type, skipDirection) => {
+    const newSortType = storageModule.getSort(manager.initialSort) !== type
+    const currentAsc = storageModule.getSortDirection()
+    let ascending
+    if (skipDirection) {
+        ascending = currentAsc
+    } else {
+        ascending = newSortType ? false : !currentAsc
+    }
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    const list = manager.testSubset
+    const sortedList = type === 'duration' ? durationSort(list, ascending) : genericSort(list, type, ascending)
+    manager.setRender(sortedList)
+}
+
+module.exports = {
+    doInitSort,
+    doSort,
+}
+
+},{"./datamanager.js":1,"./storage.js":8}],8:[function(require,module,exports){
+const possibleFilters = [
+    'passed',
+    'skipped',
+    'failed',
+    'error',
+    'xfailed',
+    'xpassed',
+    'rerun',
+]
+
+const getVisible = () => {
+    const url = new URL(window.location.href)
+    const settings = new URLSearchParams(url.search).get('visible')
+    const lower = (item) => {
+        const lowerItem = item.toLowerCase()
+        if (possibleFilters.includes(lowerItem)) {
+            return lowerItem
+        }
+        return null
+    }
+    return settings === null ?
+        possibleFilters :
+        [...new Set(settings?.split(',').map(lower).filter((item) => item))]
+}
+
+const hideCategory = (categoryToHide) => {
+    const url = new URL(window.location.href)
+    const visibleParams = new URLSearchParams(url.search).get('visible')
+    const currentVisible = visibleParams ? visibleParams.split(',') : [...possibleFilters]
+    const settings = [...new Set(currentVisible)].filter((f) => f !== categoryToHide).join(',')
+
+    url.searchParams.set('visible', settings)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const showCategory = (categoryToShow) => {
+    if (typeof window === 'undefined') {
+        return
+    }
+    const url = new URL(window.location.href)
+    const currentVisible = new URLSearchParams(url.search).get('visible')?.split(',').filter(Boolean) ||
+        [...possibleFilters]
+    const settings = [...new Set([categoryToShow, ...currentVisible])]
+    const noFilter = possibleFilters.length === settings.length || !settings.length
+
+    noFilter ? url.searchParams.delete('visible') : url.searchParams.set('visible', settings.join(','))
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getSort = (initialSort) => {
+    const url = new URL(window.location.href)
+    let sort = new URLSearchParams(url.search).get('sort')
+    if (!sort) {
+        sort = initialSort || 'result'
+    }
+    return sort
+}
+
+const setSort = (type) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('sort', type)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getCollapsedCategory = (renderCollapsed) => {
+    let categories
+    if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        const collapsedItems = new URLSearchParams(url.search).get('collapsed')
+        switch (true) {
+        case !renderCollapsed && collapsedItems === null:
+            categories = ['passed']
+            break
+        case collapsedItems?.length === 0 || /^["']{2}$/.test(collapsedItems):
+            categories = []
+            break
+        case /^all$/.test(collapsedItems) || collapsedItems === null && /^all$/.test(renderCollapsed):
+            categories = [...possibleFilters]
+            break
+        default:
+            categories = collapsedItems?.split(',').map((item) => item.toLowerCase()) || renderCollapsed
+            break
+        }
+    } else {
+        categories = []
+    }
+    return categories
+}
+
+const getSortDirection = () => JSON.parse(sessionStorage.getItem('sortAsc')) || false
+const setSortDirection = (ascending) => sessionStorage.setItem('sortAsc', ascending)
+
+const getCollapsedIds = () => JSON.parse(sessionStorage.getItem('collapsedIds')) || []
+const setCollapsedIds = (list) => sessionStorage.setItem('collapsedIds', JSON.stringify(list))
+
+module.exports = {
+    getVisible,
+    hideCategory,
+    showCategory,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    setSort,
+    getSortDirection,
+    setSortDirection,
+    getCollapsedCategory,
+    possibleFilters,
+}
+
+},{}]},{},[4]);
+    </script>
+  </footer>
+</html>

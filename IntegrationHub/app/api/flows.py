@@ -296,6 +296,470 @@ PREDEFINED_FLOWS: Dict[str, Dict[str, Any]] = {
                 }
             }
         ]
+    },
+    "create-gitlab-issue": {
+        "id": "create-gitlab-issue",
+        "name": "Create GitLab Issue",
+        "description": "Creates a new issue in a GitLab project.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["project_id", "title", "description", "labels"]
+            }
+        },
+        "steps": [
+            {
+                "name": "create_issue",
+                "connector_id": "gitlab",
+                "credential_id": "gitlab-credentials",
+                "configuration": {
+                    "action_id": "create_issue",
+                    "project_id": "{{ trigger.project_id }}"
+                },
+                "dependencies": []
+            }
+        ]
+    },
+    "gitlab-mr-workflow": {
+        "id": "gitlab-mr-workflow",
+        "name": "GitLab Merge Request Workflow",
+        "description": "Creates a branch, commits changes, and opens a merge request in GitLab.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["project_id", "branch_name", "title", "description", "file_path", "content", "commit_message"]
+            }
+        },
+        "steps": [
+            {
+                "name": "create_branch",
+                "connector_id": "gitlab",
+                "credential_id": "gitlab-credentials",
+                "configuration": {
+                    "action_id": "create_branch",
+                    "project_id": "{{ trigger.project_id }}"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "create_commit",
+                "connector_id": "gitlab",
+                "credential_id": "gitlab-credentials",
+                "configuration": {
+                    "action_id": "create_commit",
+                    "project_id": "{{ trigger.project_id }}"
+                },
+                "dependencies": ["create_branch"]
+            },
+            {
+                "name": "create_merge_request",
+                "connector_id": "gitlab",
+                "credential_id": "gitlab-credentials",
+                "configuration": {
+                    "action_id": "create_merge_request",
+                    "project_id": "{{ trigger.project_id }}"
+                },
+                "dependencies": ["create_commit"]
+            }
+        ]
+    },
+    "nextcloud-document-workflow": {
+        "id": "nextcloud-document-workflow",
+        "name": "NextCloud Document Workflow",
+        "description": "Uploads a document to NextCloud and creates a share link.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["file_path", "content", "share_type"]
+            }
+        },
+        "steps": [
+            {
+                "name": "upload_file",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "upload_file",
+                    "file_path": "{{ trigger.file_path }}"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "create_share",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "share_file",
+                    "file_path": "{{ trigger.file_path }}",
+                    "share_type": "{{ trigger.share_type | default(3) }}"
+                },
+                "dependencies": ["upload_file"]
+            }
+        ]
+    },
+    "onlyoffice-collaborative-editing": {
+        "id": "onlyoffice-collaborative-editing",
+        "name": "OnlyOffice Collaborative Editing Setup",
+        "description": "Creates a document in OnlyOffice and shares it with specified users.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["title", "document_type", "users", "permissions"]
+            }
+        },
+        "steps": [
+            {
+                "name": "create_document",
+                "connector_id": "onlyoffice",
+                "credential_id": "onlyoffice-credentials",
+                "configuration": {
+                    "action_id": "create_document",
+                    "document_type": "{{ trigger.document_type | default('docx') }}"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "share_document",
+                "connector_id": "onlyoffice",
+                "credential_id": "onlyoffice-credentials",
+                "configuration": {
+                    "action_id": "share_document",
+                    "permissions": "{{ trigger.permissions | default('write') }}"
+                },
+                "dependencies": ["create_document"]
+            }
+        ]
+    },
+    "project-workflow-automation": {
+        "id": "project-workflow-automation",
+        "name": "Project Workflow Automation",
+        "description": "Comprehensive workflow that creates a GitLab issue, shares documents via NextCloud, and sets up collaborative editing in OnlyOffice.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["project_id", "issue_title", "issue_description", "document_title", "collaborators"]
+            }
+        },
+        "steps": [
+            {
+                "name": "create_gitlab_issue",
+                "connector_id": "gitlab",
+                "credential_id": "gitlab-credentials",
+                "configuration": {
+                    "action_id": "create_issue",
+                    "project_id": "{{ trigger.project_id }}"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "create_project_folder",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "create_folder",
+                    "folder_path": "projects/{{ trigger.project_id }}-{{ trigger.issue_title | slugify }}"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "create_collaborative_document",
+                "connector_id": "onlyoffice",
+                "credential_id": "onlyoffice-credentials",
+                "configuration": {
+                    "action_id": "create_document",
+                    "document_type": "docx"
+                },
+                "dependencies": ["create_project_folder"]
+            },
+            {
+                "name": "share_document_with_team",
+                "connector_id": "onlyoffice",
+                "credential_id": "onlyoffice-credentials",
+                "configuration": {
+                    "action_id": "share_document",
+                    "permissions": "write"
+                },
+                "dependencies": ["create_collaborative_document"]
+            },
+            {
+                "name": "comment_on_gitlab_issue",
+                "connector_id": "gitlab",
+                "credential_id": "gitlab-credentials",
+                "configuration": {
+                    "action_id": "create_comment",
+                    "project_id": "{{ trigger.project_id }}",
+                    "resource_type": "issues"
+                },
+                "dependencies": ["create_gitlab_issue", "share_document_with_team"]
+            }
+        ]
+    },
+    "digital-content-pipeline": {
+        "id": "digital-content-pipeline",
+        "name": "Digital Content Creation Pipeline",
+        "description": "Complete digital content pipeline: design in FreeCAD, process images in GIMP, edit videos in OpenShot, and share via NextCloud.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["project_name", "cad_specifications", "image_assets", "video_requirements"]
+            }
+        },
+        "steps": [
+            {
+                "name": "create_cad_model",
+                "connector_id": "freecad",
+                "credential_id": "freecad-credentials",
+                "configuration": {
+                    "action_id": "create_document"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "generate_renderings",
+                "connector_id": "freecad",
+                "credential_id": "freecad-credentials",
+                "configuration": {
+                    "action_id": "export_document",
+                    "export_format": "STL"
+                },
+                "dependencies": ["create_cad_model"]
+            },
+            {
+                "name": "process_images",
+                "connector_id": "multimedia",
+                "credential_id": "multimedia-credentials",
+                "configuration": {
+                    "action_id": "convert_image"
+                },
+                "dependencies": ["generate_renderings"]
+            },
+            {
+                "name": "create_marketing_video",
+                "connector_id": "multimedia",
+                "credential_id": "multimedia-credentials",
+                "configuration": {
+                    "action_id": "export_video"
+                },
+                "dependencies": ["process_images"]
+            },
+            {
+                "name": "upload_to_nextcloud",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "create_folder",
+                    "folder_path": "projects/{{ trigger.project_name }}/deliverables"
+                },
+                "dependencies": ["create_marketing_video"]
+            },
+            {
+                "name": "share_with_stakeholders",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "share_file",
+                    "share_type": 3
+                },
+                "dependencies": ["upload_to_nextcloud"]
+            }
+        ]
+    },
+    "automated-design-review": {
+        "id": "automated-design-review",
+        "name": "Automated Design Review Process",
+        "description": "Automated workflow that reviews CAD designs, generates technical documentation, and creates GitLab issues for feedback.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["cad_file_path", "project_id", "review_checklist"]
+            }
+        },
+        "steps": [
+            {
+                "name": "analyze_cad_model",
+                "connector_id": "freecad",
+                "credential_id": "freecad-credentials",
+                "configuration": {
+                    "action_id": "calculate_volume"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "generate_technical_drawings",
+                "connector_id": "freecad",
+                "credential_id": "freecad-credentials",
+                "configuration": {
+                    "action_id": "generate_technical_drawing"
+                },
+                "dependencies": ["analyze_cad_model"]
+            },
+            {
+                "name": "create_review_document",
+                "connector_id": "onlyoffice",
+                "credential_id": "onlyoffice-credentials",
+                "configuration": {
+                    "action_id": "create_document",
+                    "document_type": "docx"
+                },
+                "dependencies": ["generate_technical_drawings"]
+            },
+            {
+                "name": "create_gitlab_issue",
+                "connector_id": "gitlab",
+                "credential_id": "gitlab-credentials",
+                "configuration": {
+                    "action_id": "create_issue",
+                    "project_id": "{{ trigger.project_id }}"
+                },
+                "dependencies": ["create_review_document"]
+            },
+            {
+                "name": "notify_team",
+                "connector_id": "smtp-email",
+                "credential_id": "smtp-credentials",
+                "configuration": {
+                    "action_id": "send"
+                },
+                "dependencies": ["create_gitlab_issue"]
+            }
+        ]
+    },
+    "multimedia-content-automation": {
+        "id": "multimedia-content-automation",
+        "name": "Multimedia Content Automation",
+        "description": "Automated multimedia processing: batch process images, enhance audio, create video montages, and distribute content.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["source_folder", "output_specifications", "distribution_channels"]
+            }
+        },
+        "steps": [
+            {
+                "name": "batch_process_images",
+                "connector_id": "multimedia",
+                "credential_id": "multimedia-credentials",
+                "configuration": {
+                    "action_id": "batch_process"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "enhance_audio",
+                "connector_id": "multimedia",
+                "credential_id": "multimedia-credentials",
+                "configuration": {
+                    "action_id": "apply_effects"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "create_video_montage",
+                "connector_id": "multimedia",
+                "credential_id": "multimedia-credentials",
+                "configuration": {
+                    "action_id": "export_video"
+                },
+                "dependencies": ["batch_process_images", "enhance_audio"]
+            },
+            {
+                "name": "upload_to_storage",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "upload_file"
+                },
+                "dependencies": ["create_video_montage"]
+            },
+            {
+                "name": "create_sharing_links",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "share_file"
+                },
+                "dependencies": ["upload_to_storage"]
+            }
+        ]
+    },
+    "engineering-workflow-complete": {
+        "id": "engineering-workflow-complete",
+        "name": "Complete Engineering Workflow",
+        "description": "End-to-end engineering workflow: requirements in OpenProject, design in FreeCAD, code in GitLab, documentation in OnlyOffice, and deliverables in NextCloud.",
+        "trigger": {
+            "type": "manual",
+            "configuration": {
+                "parameters": ["project_id", "requirements", "design_specs", "timeline"]
+            }
+        },
+        "steps": [
+            {
+                "name": "create_work_package",
+                "connector_id": "openproject",
+                "credential_id": "openproject-credentials",
+                "configuration": {
+                    "action_id": "create_work_package"
+                },
+                "dependencies": []
+            },
+            {
+                "name": "create_cad_design",
+                "connector_id": "freecad",
+                "credential_id": "freecad-credentials",
+                "configuration": {
+                    "action_id": "create_document"
+                },
+                "dependencies": ["create_work_package"]
+            },
+            {
+                "name": "setup_code_repository",
+                "connector_id": "gitlab",
+                "credential_id": "gitlab-credentials",
+                "configuration": {
+                    "action_id": "create_branch",
+                    "project_id": "{{ trigger.project_id }}"
+                },
+                "dependencies": ["create_cad_design"]
+            },
+            {
+                "name": "create_technical_documentation",
+                "connector_id": "onlyoffice",
+                "credential_id": "onlyoffice-credentials",
+                "configuration": {
+                    "action_id": "create_document",
+                    "document_type": "docx"
+                },
+                "dependencies": ["setup_code_repository"]
+            },
+            {
+                "name": "organize_project_deliverables",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "create_folder",
+                    "folder_path": "engineering-projects/{{ trigger.project_id }}"
+                },
+                "dependencies": ["create_technical_documentation"]
+            },
+            {
+                "name": "share_with_stakeholders",
+                "connector_id": "nextcloud",
+                "credential_id": "nextcloud-credentials",
+                "configuration": {
+                    "action_id": "share_file"
+                },
+                "dependencies": ["organize_project_deliverables"]
+            },
+            {
+                "name": "update_project_status",
+                "connector_id": "openproject",
+                "credential_id": "openproject-credentials",
+                "configuration": {
+                    "action_id": "update_work_package"
+                },
+                "dependencies": ["share_with_stakeholders"]
+            }
+        ]
     }
 }
 
