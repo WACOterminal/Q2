@@ -1,0 +1,196 @@
+# Istio Gateway Configuration
+gateways:
+  istio-ingressgateway:
+    enabled: true
+    name: istio-ingressgateway
+    labels:
+      app: istio-ingressgateway
+      istio: ingressgateway
+    
+    # Service configuration
+    service:
+      type: LoadBalancer
+      ports:
+        - port: 15021
+          targetPort: 15021
+          name: status-port
+          protocol: TCP
+        - port: 80
+          targetPort: 8080
+          name: http2
+          protocol: TCP
+        - port: 443
+          targetPort: 8443
+          name: https
+          protocol: TCP
+        - port: 31400
+          targetPort: 31400
+          name: tcp
+          protocol: TCP
+        - port: 15443
+          targetPort: 15443
+          name: tls
+          protocol: TCP
+    
+    # Deployment configuration
+    replicaCount: 3
+    
+    # Resource configuration
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 2000m
+        memory: 1024Mi
+    
+    # Autoscaling
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 80
+    
+    # Pod disruption budget
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    
+    # Node selection
+    nodeSelector:
+      kubernetes.io/os: linux
+    
+    # Tolerations
+    tolerations:
+      - key: "istio-gateway"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+    
+    # Affinity
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: istio-ingressgateway
+            topologyKey: kubernetes.io/hostname
+    
+    # Environment variables
+    env:
+      - name: ISTIO_META_ROUTER_MODE
+        value: "sni-dnat"
+      - name: ISTIO_META_HTTP10
+        value: "1"
+    
+    # Security context
+    securityContext:
+      runAsUser: 1337
+      runAsGroup: 1337
+      runAsNonRoot: true
+      fsGroup: 1337
+    
+    # Probes
+    readinessProbe:
+      failureThreshold: 30
+      httpGet:
+        path: /healthz/ready
+        port: 15021
+        scheme: HTTP
+      initialDelaySeconds: 1
+      periodSeconds: 2
+      successThreshold: 1
+      timeoutSeconds: 1
+    
+    # Annotations
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "15090"
+      prometheus.io/path: "/stats/prometheus"
+    
+    # Service annotations
+    serviceAnnotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    
+    # Ports
+    ports:
+      - port: 15021
+        targetPort: 15021
+        name: status-port
+        protocol: TCP
+      - port: 80
+        targetPort: 8080
+        name: http2
+        protocol: TCP
+      - port: 443
+        targetPort: 8443
+        name: https
+        protocol: TCP
+      - port: 31400
+        targetPort: 31400
+        name: tcp
+        protocol: TCP
+      - port: 15443
+        targetPort: 15443
+        name: tls
+        protocol: TCP
+
+# Gateway resources
+gateway:
+  name: q-platform-gateway
+  namespace: ${namespace}
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: q-platform-tls
+      hosts:
+        - "*"
+
+# Virtual services
+virtualService:
+  name: q-platform-vs
+  namespace: ${namespace}
+  gateways:
+    - q-platform-gateway
+  hosts:
+    - "*"
+  http:
+    - match:
+        - uri:
+            prefix: "/api/v1"
+      route:
+        - destination:
+            host: manager-q.${namespace}.svc.cluster.local
+            port:
+              number: 8003
+    - match:
+        - uri:
+            prefix: "/h2m"
+      route:
+        - destination:
+            host: h2m-service.${namespace}.svc.cluster.local
+            port:
+              number: 8002
+    - match:
+        - uri:
+            prefix: "/"
+      route:
+        - destination:
+            host: webapp-q.${namespace}.svc.cluster.local
+            port:
+              number: 80 

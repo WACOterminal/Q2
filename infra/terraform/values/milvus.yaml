@@ -1,31 +1,312 @@
-# Milvus Helm Chart Values for a standalone deployment
-# Full list of values: https://github.com/milvus-io/milvus-helm/blob/master/charts/milvus/values.yaml
+# Milvus Configuration for Q Platform
+# Production-ready vector database configuration
 
-# Use the standalone mode for a simpler, lightweight deployment suitable for development.
+# --- Cluster Configuration ---
 cluster:
-  enabled: false
-
-standalone:
   enabled: true
   
-  # Configure persistence for the standalone instance
+# --- Image Configuration ---
+image:
+  all:
+    repository: "milvusdb/milvus"
+    tag: "v2.3.4"
+    pullPolicy: "IfNotPresent"
+
+# --- External Dependencies ---
+etcd:
+  enabled: true
+  replicaCount: 3
+  auth:
+    rbac:
+      create: false
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
   persistence:
     enabled: true
-    # The size of the PVC for Milvus data
-    size: 20Gi
+    size: "10Gi"
+    storageClass: "fast-ssd"
 
-# Disable bundled dependencies that we manage separately or don't need for standalone.
-etcd:
-  enabled: false
 minio:
-  enabled: false
+  enabled: true
+  mode: "distributed"
+  replicas: 4
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  persistence:
+    enabled: true
+    size: "50Gi"
+    storageClass: "fast-ssd"
+
 pulsar:
-  enabled: false
-kafka:
-  enabled: false
-  
-# Expose the Milvus service via a LoadBalancer for easy access from other services
+  enabled: false  # Using external Pulsar cluster
+
+# --- Milvus Components ---
+queryNode:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  extraEnvVars:
+    - name: "QUERY_NODE_CACHE_SIZE"
+      value: "1073741824"  # 1GB
+
+queryCoordinator:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+dataNode:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  extraEnvVars:
+    - name: "DATA_NODE_FLUSH_SIZE"
+      value: "134217728"  # 128MB
+
+dataCoordinator:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+indexNode:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  extraEnvVars:
+    - name: "INDEX_NODE_BUILD_MEM_RATIO"
+      value: "0.7"
+
+indexCoordinator:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+proxy:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  service:
+    type: "ClusterIP"
+    port: 19530
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9091"
+      prometheus.io/path: "/metrics"
+
+rootCoordinator:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+# --- Service Configuration ---
 service:
-  type: LoadBalancer
-  # The default port for the Milvus service
-  port: 19530 
+  type: "ClusterIP"
+  port: 19530
+  portName: "milvus"
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9091"
+
+# --- Ingress Configuration ---
+ingress:
+  enabled: false
+  annotations: {}
+  hosts:
+    - host: "milvus.q-platform.local"
+      paths:
+        - path: "/"
+          pathType: "Prefix"
+  tls: []
+
+# --- Monitoring Configuration ---
+serviceMonitor:
+  enabled: true
+  namespace: "monitoring"
+  labels:
+    app: "milvus"
+  interval: "30s"
+  scrapeTimeout: "10s"
+
+metrics:
+  enabled: true
+  
+# --- Security Configuration ---
+auth:
+  enabled: true
+  
+# --- Configuration ---
+config:
+  # Common configuration
+  common:
+    defaultPartitionName: "_default"
+    defaultIndexName: "_default_idx"
+    entityExpiration: 3600
+    indexSliceSize: 16
+    
+  # Etcd configuration
+  etcd:
+    endpoints: ["etcd:2379"]
+    rootPath: "by-dev"
+    metaSubPath: "meta"
+    kvSubPath: "kv"
+    
+  # MinIO configuration
+  minio:
+    address: "minio"
+    port: 9000
+    accessKeyID: "minioadmin"
+    secretAccessKey: "minioadmin"
+    useSSL: false
+    bucketName: "milvus-bucket"
+    rootPath: "files"
+    
+  # Log configuration
+  log:
+    level: "info"
+    file:
+      rootPath: "/var/lib/milvus/logs"
+      
+  # Proxy configuration
+  proxy:
+    port: 19530
+    internalPort: 19529
+    
+  # Query service configuration
+  queryService:
+    port: 19531
+    
+  # Data service configuration
+  dataService:
+    port: 19532
+    
+  # Index service configuration
+  indexService:
+    port: 19533
+    
+  # Root coordinator configuration
+  rootCoordinator:
+    port: 19534
+    
+  # Query coordinator configuration
+  queryCoordinator:
+    port: 19535
+    
+  # Data coordinator configuration
+  dataCoordinator:
+    port: 19536
+    
+  # Index coordinator configuration
+  indexCoordinator:
+    port: 19537
+
+# --- Scheduling Configuration ---
+nodeSelector:
+  node-type: "compute-optimized"
+
+tolerations:
+  - key: "milvus-workload"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: milvus
+          topologyKey: kubernetes.io/hostname
+
+# --- Pod Disruption Budget ---
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# --- Persistence Configuration ---
+persistence:
+  persistentVolumeClaim:
+    enabled: true
+    size: "50Gi"
+    storageClass: "fast-ssd"
+    accessMode: "ReadWriteOnce"
+
+# --- Initialization ---
+initContainers:
+  - name: "wait-for-etcd"
+    image: "busybox:1.36"
+    command: 
+      - "sh"
+      - "-c"
+      - "until nslookup etcd; do echo waiting for etcd; sleep 2; done"
+  - name: "wait-for-minio"
+    image: "busybox:1.36"
+    command:
+      - "sh"
+      - "-c"
+      - "until nslookup minio; do echo waiting for minio; sleep 2; done"
+
+# --- Extra Configuration ---
+extraEnvVars:
+  - name: "MILVUS_CONFIG_PATH"
+    value: "/milvus/configs/milvus.yaml"
+  - name: "MILVUS_LOG_LEVEL"
+    value: "info" 

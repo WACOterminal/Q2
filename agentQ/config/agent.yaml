@@ -1,0 +1,229 @@
+# AgentQ Service Configuration
+service:
+  name: agentq
+  version: "1.0.0"
+  port: 8000
+  host: "0.0.0.0"
+  
+  # Health check configuration
+  health_check:
+    enabled: true
+    path: "/health"
+    interval: 30
+    timeout: 5
+
+# Agent configuration
+agent:
+  personality: "default"  # Can be overridden by environment variable
+  max_memory_size: 1000
+  tool_timeout: 30
+  max_retries: 3
+  retry_delay: 1.0
+  
+  # ReAct loop configuration
+  react_loop:
+    max_iterations: 10
+    thought_timeout: 30
+    action_timeout: 60
+    observation_timeout: 30
+
+# Database configuration
+database:
+  type: "postgresql"
+  host: "postgres"
+  port: 5432
+  name: "agentq"
+  username: "agentq"
+  # Password will be read from Vault
+  ssl_mode: "require"
+  max_connections: 20
+  pool_size: 10
+
+# Cache configuration
+cache:
+  type: "redis"
+  host: "redis"
+  port: 6379
+  db: 1
+  ttl: 3600
+
+# Message broker configuration
+pulsar:
+  service_url: "pulsar://pulsar-broker:6650"
+  admin_url: "http://pulsar-admin:8080"
+  topics:
+    registrations: "persistent://public/default/q.agentq.registrations"
+    results: "persistent://public/default/q.agentq.results"
+    thoughts: "persistent://public/default/q.agentq.thoughts"
+    human_feedback: "persistent://public/default/q.human.feedback"
+
+# LLM configuration
+llm:
+  default_model: "gpt-4"
+  max_tokens: 4096
+  temperature: 0.7
+  timeout: 60
+  fallback_model: "gpt-3.5-turbo"
+  
+  # Model routing
+  models:
+    reasoning: "gpt-4"
+    coding: "gpt-4"
+    analysis: "gpt-4"
+    conversation: "gpt-3.5-turbo"
+
+# Quantum computing configuration
+quantum:
+  enabled: true
+  backends:
+    - name: "qiskit"
+      provider: "ibm"
+      backend: "ibmq_qasm_simulator"
+      max_shots: 1024
+    - name: "cirq"
+      provider: "google"
+      backend: "simulator"
+    - name: "pennylane"
+      provider: "default.qubit"
+      backend: "simulator"
+  
+  # Quantum optimization settings
+  optimization:
+    enabled: true
+    max_qubits: 5
+    circuit_depth: 10
+    optimization_level: 2
+
+# Neuromorphic computing configuration
+neuromorphic:
+  enabled: true
+  simulators:
+    - name: "brian2"
+      backend: "cpp_standalone"
+      max_neurons: 1000
+    - name: "nengo"
+      backend: "reference"
+      max_neurons: 1000
+    - name: "nest"
+      backend: "sli"
+      max_neurons: 10000
+  
+  # Spiking neural network settings
+  snn:
+    enabled: true
+    timestep: 0.1  # milliseconds
+    simulation_time: 1000  # milliseconds
+    plasticity: true
+
+# Tools configuration
+tools:
+  enabled:
+    - kubernetes
+    - devops
+    - search
+    - knowledge
+    - integration
+    - memory
+    - code_search
+    - file_system
+    - github
+    - delegation
+    - airflow
+    - ui_generation
+  
+  # Tool-specific settings
+  kubernetes:
+    namespace: "q-platform"
+    timeout: 30
+  
+  devops:
+    max_concurrent_operations: 5
+    timeout: 120
+  
+  memory:
+    enabled: true
+    persistence: true
+    ttl: 3600
+
+# Service discovery
+services:
+  managerq:
+    url: "http://manager-q:8003"
+    timeout: 30
+  quantumpulse:
+    url: "http://quantumpulse-api:8000"
+    timeout: 60
+  vectorstore:
+    url: "http://vectorstore-q:8001"
+    timeout: 30
+  knowledgegraph:
+    url: "http://knowledgegraphq:8000"
+    timeout: 30
+  integrationhub:
+    url: "http://integrationhub:8000"
+    timeout: 30
+
+# Observability configuration
+observability:
+  metrics:
+    enabled: true
+    port: 9091
+    path: "/metrics"
+  tracing:
+    enabled: true
+    jaeger_endpoint: "http://jaeger-collector:14268"
+  logging:
+    level: "INFO"
+    format: "json"
+    output: "stdout"
+
+# Security configuration
+security:
+  sandbox:
+    enabled: true
+    max_execution_time: 300
+    max_memory_usage: "512Mi"
+    max_cpu_usage: "500m"
+  
+  code_execution:
+    enabled: true
+    allowed_languages: ["python", "bash", "javascript", "sql"]
+    timeout: 60
+    max_output_size: 10000
+
+# Machine learning configuration
+ml:
+  frameworks:
+    - name: "pytorch"
+      version: "2.0.0"
+      device: "cpu"  # or "cuda" if GPU available
+    - name: "tensorflow"
+      version: "2.12.0"
+      device: "cpu"
+    - name: "scikit-learn"
+      version: "1.3.0"
+  
+  # Model training settings
+  training:
+    max_epochs: 100
+    batch_size: 32
+    learning_rate: 0.001
+    early_stopping: true
+    patience: 10
+
+# Kubernetes configuration
+kubernetes:
+  namespace: "q-platform"
+  service_account: "agentq"
+  labels:
+    app: "agentq"
+    version: "1.0.0"
+    component: "agent"
+
+# Performance tuning
+performance:
+  worker_threads: 4
+  async_io: true
+  connection_pool_size: 10
+  request_timeout: 30
+  keep_alive_timeout: 5 

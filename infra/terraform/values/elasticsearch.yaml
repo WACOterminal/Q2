@@ -1,25 +1,396 @@
+# Elasticsearch Configuration for Q Platform
+# Production-ready configuration with vector search, security, and monitoring
+
+# --- Cluster Configuration ---
+clusterName: "q-platform-elasticsearch"
+nodeGroup: "master"
+
+# --- Master Node Configuration ---
+masterService: "elasticsearch-master"
+roles:
+  master: "true"
+  ingest: "true"
+  data: "true"
+  remote_cluster_client: "true"
+  ml: "true"
+
+# --- Replica Configuration ---
 replicas: 3
-esJavaOpts: "-Xms1g -Xmx1g"
+minimumMasterNodes: 2
+
+# --- Image Configuration ---
+image: "docker.elastic.co/elasticsearch/elasticsearch"
+imageTag: "8.11.0"
+imagePullPolicy: "IfNotPresent"
+
+# --- Resource Configuration ---
 resources:
   requests:
-    cpu: "500m"
+    cpu: "1000m"
     memory: "2Gi"
   limits:
-    cpu: "1"
+    cpu: "2000m"
     memory: "4Gi"
+
+# --- JVM Configuration ---
+esJavaOpts: "-Xms2g -Xmx2g"
+
+# --- Storage Configuration ---
+persistence:
+  enabled: true
+  labels:
+    enabled: false
+  
 volumeClaimTemplate:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: 20Gi
+      storage: 100Gi
+  storageClassName: "fast-ssd"
 
-# Enable settings for vector search capabilities
-# The 'dense_vector' type is available in the default distribution,
-# but being explicit about settings is good practice.
-# No specific plugins are required for basic dense_vector support.
-cluster:
-  name: elasticsearch
-  env:
-    # Set any necessary environment variables for the cluster
-    # For example, discovery settings if needed.
-    # discovery.type: "single-node" # For local development 
+# --- Security Configuration ---
+createCert: true
+secret:
+  enabled: true
+  password: "elasticsearch-password-from-vault"  # Change this!
+  
+# X-Pack security settings
+xpack:
+  enabled: true
+  security:
+    enabled: true
+    transport:
+      ssl:
+        enabled: true
+        verification_mode: "certificate"
+    http:
+      ssl:
+        enabled: true
+  
+# --- Network Configuration ---
+service:
+  enabled: true
+  type: "ClusterIP"
+  port: 9200
+  nodePort: ""
+  loadBalancerIP: ""
+  
+  # Annotations for monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9200"
+    prometheus.io/path: "/_prometheus/metrics"
+
+# --- Elasticsearch Configuration ---
+esConfig:
+  elasticsearch.yml: |
+    # Cluster settings
+    cluster.name: q-platform-elasticsearch
+    
+    # Node settings
+    node.name: ${HOSTNAME}
+    node.roles: [master, data, ingest, remote_cluster_client, ml]
+    
+    # Network settings
+    network.host: 0.0.0.0
+    http.port: 9200
+    transport.port: 9300
+    
+    # Discovery settings
+    discovery.seed_hosts: ["elasticsearch-master-headless"]
+    cluster.initial_master_nodes: ["elasticsearch-master-0", "elasticsearch-master-1", "elasticsearch-master-2"]
+    
+    # Security settings
+    xpack.security.enabled: true
+    xpack.security.transport.ssl.enabled: true
+    xpack.security.transport.ssl.verification_mode: certificate
+    xpack.security.transport.ssl.keystore.path: certs/elastic-certificates.p12
+    xpack.security.transport.ssl.truststore.path: certs/elastic-certificates.p12
+    xpack.security.http.ssl.enabled: true
+    xpack.security.http.ssl.keystore.path: certs/elastic-certificates.p12
+    
+    # Monitoring settings
+    xpack.monitoring.enabled: true
+    xpack.monitoring.collection.enabled: true
+    
+    # Machine learning settings
+    xpack.ml.enabled: true
+    
+    # Index settings
+    action.auto_create_index: true
+    action.destructive_requires_name: true
+    
+    # Memory settings
+    bootstrap.memory_lock: false
+    
+    # Vector search settings
+    # Enable dense_vector mapping type for vector search
+    indices.query.bool.max_clause_count: 10000
+    
+    # Performance settings
+    thread_pool.search.size: 5
+    thread_pool.search.queue_size: 1000
+    thread_pool.write.size: 5
+    thread_pool.write.queue_size: 1000
+    
+    # Logging settings
+    logger.org.elasticsearch.deprecation: warn
+    logger.org.elasticsearch.transport: info
+    logger.org.elasticsearch.discovery: info
+    
+    # Snapshot settings
+    path.repo: ["/usr/share/elasticsearch/backup"]
+
+# --- Environment Variables ---
+extraEnvs:
+  - name: "ELASTIC_PASSWORD"
+    valueFrom:
+      secretKeyRef:
+        name: "elasticsearch-master-credentials"
+        key: "password"
+  - name: "ELASTIC_USERNAME"
+    value: "elastic"
+
+# --- Init Container Configuration ---
+extraInitContainers:
+  - name: "setup-sysctl"
+    image: "busybox:1.36"
+    command: 
+      - "sysctl"
+      - "-w"
+      - "vm.max_map_count=262144"
+    securityContext:
+      privileged: true
+
+# --- Security Context ---
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+
+# --- Scheduling Configuration ---
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: "elasticsearch-master"
+          topologyKey: kubernetes.io/hostname
+
+nodeSelector:
+  node-type: "storage-optimized"
+
+tolerations:
+  - key: "elasticsearch-workload"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+
+# --- Pod Disruption Budget ---
+maxUnavailable: 1
+
+# --- Probes Configuration ---
+readinessProbe:
+  failureThreshold: 3
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  successThreshold: 3
+  timeoutSeconds: 5
+
+# --- Lifecycle Configuration ---
+lifecycle:
+  preStop:
+    exec:
+      command:
+        - bash
+        - -c
+        - |
+          #!/bin/bash
+          # Allow time for the pod to be removed from service endpoints
+          sleep 15
+
+# --- Ingress Configuration ---
+ingress:
+  enabled: false
+  annotations: {}
+  hosts:
+    - host: "elasticsearch.q-platform.local"
+      paths:
+        - path: "/"
+          pathType: "Prefix"
+  tls: []
+
+# --- Monitoring Configuration ---
+prometheusRule:
+  enabled: true
+  
+serviceMonitor:
+  enabled: true
+  namespace: "monitoring"
+  labels:
+    app: "elasticsearch"
+  interval: "30s"
+  scrapeTimeout: "10s"
+
+# --- Backup Configuration ---
+extraVolumes:
+  - name: "backup-storage"
+    persistentVolumeClaim:
+      claimName: "elasticsearch-backup-pvc"
+
+extraVolumeMounts:
+  - name: "backup-storage"
+    mountPath: "/usr/share/elasticsearch/backup"
+
+# --- Index Templates ---
+indexTemplates:
+  - name: "q-platform-logs"
+    template: |
+      {
+        "index_patterns": ["q-platform-logs-*"],
+        "settings": {
+          "number_of_shards": 1,
+          "number_of_replicas": 1,
+          "refresh_interval": "5s"
+        },
+        "mappings": {
+          "properties": {
+            "@timestamp": {
+              "type": "date"
+            },
+            "level": {
+              "type": "keyword"
+            },
+            "service": {
+              "type": "keyword"
+            },
+            "message": {
+              "type": "text",
+              "analyzer": "standard"
+            },
+            "agent_id": {
+              "type": "keyword"
+            },
+            "task_id": {
+              "type": "keyword"
+            },
+            "vector_embedding": {
+              "type": "dense_vector",
+              "dims": 384,
+              "index": true,
+              "similarity": "cosine"
+            }
+          }
+        }
+      }
+
+  - name: "q-platform-metrics"
+    template: |
+      {
+        "index_patterns": ["q-platform-metrics-*"],
+        "settings": {
+          "number_of_shards": 1,
+          "number_of_replicas": 1,
+          "refresh_interval": "30s"
+        },
+        "mappings": {
+          "properties": {
+            "@timestamp": {
+              "type": "date"
+            },
+            "metric_name": {
+              "type": "keyword"
+            },
+            "metric_value": {
+              "type": "double"
+            },
+            "service": {
+              "type": "keyword"
+            },
+            "labels": {
+              "type": "object"
+            }
+          }
+        }
+      }
+
+# --- Pipeline Configuration ---
+ingestPipelines:
+  - name: "q-platform-log-enrichment"
+    pipeline: |
+      {
+        "processors": [
+          {
+            "set": {
+              "field": "processed_at",
+              "value": "{{_ingest.timestamp}}"
+            }
+          },
+          {
+            "grok": {
+              "field": "message",
+              "patterns": [
+                "\\[%{TIMESTAMP_ISO8601:timestamp}\\] %{LOGLEVEL:level} %{GREEDYDATA:log_message}"
+              ],
+              "ignore_failure": true
+            }
+          }
+        ]
+      }
+
+# --- Lifecycle Management ---
+ilmPolicies:
+  - name: "q-platform-logs-policy"
+    policy: |
+      {
+        "phases": {
+          "hot": {
+            "actions": {
+              "rollover": {
+                "max_size": "1gb",
+                "max_age": "1d"
+              }
+            }
+          },
+          "warm": {
+            "min_age": "7d",
+            "actions": {
+              "shrink": {
+                "number_of_shards": 1
+              }
+            }
+          },
+          "cold": {
+            "min_age": "30d",
+            "actions": {
+              "allocate": {
+                "number_of_replicas": 0
+              }
+            }
+          },
+          "delete": {
+            "min_age": "90d"
+          }
+        }
+      }
+
+# --- Snapshot Configuration ---
+snapshotRepository:
+  enabled: true
+  name: "q-platform-snapshots"
+  type: "fs"
+  settings:
+    location: "/usr/share/elasticsearch/backup"
+    compress: true
+    max_snapshot_bytes_per_sec: "40mb"
+    max_restore_bytes_per_sec: "40mb" 

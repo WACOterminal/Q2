@@ -1,0 +1,84 @@
+# Apache Spark Operator Configuration
+sparkOperator:
+  # Enable metrics
+  metrics:
+    enable: true
+    port: 10254
+    portName: metrics
+    endpoint: "/metrics"
+
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    fsGroup: 1001
+
+  # Enable webhook
+  webhook:
+    enable: true
+    port: 8080
+
+  # Spark job defaults
+  sparkJobNamespace: ${namespace}
+  
+  # Node selection
+  nodeSelector:
+    node-type: compute-optimized
+
+  # Tolerations for dedicated nodes
+  tolerations:
+    - key: "spark-workload"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+
+# Spark application defaults
+sparkApplicationDefaults:
+  type: Scala
+  mode: cluster
+  image: "gcr.io/spark-operator/spark:v3.4.0"
+  imagePullPolicy: IfNotPresent
+  
+  # Driver configuration
+  driver:
+    cores: 1
+    memory: "1g"
+    serviceAccount: spark-operator-spark
+    
+  # Executor configuration
+  executor:
+    cores: 1
+    instances: 2
+    memory: "1g"
+    
+  # Monitoring
+  monitoring:
+    enabled: true
+    prometheus:
+      jmxExporterJar: "/prometheus/jmx_prometheus_javaagent-0.17.0.jar"
+      port: 8090
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: spark-operator
+
+# RBAC
+rbac:
+  create: true
+  createClusterRole: true
+  createRole: true
+
+# Batch scheduler
+batchScheduler:
+  enable: false 

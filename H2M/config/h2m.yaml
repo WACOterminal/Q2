@@ -1,0 +1,231 @@
+# H2M Service Configuration
+service:
+  name: h2m-service
+  version: "1.0.0"
+  port: 8002
+  host: "0.0.0.0"
+  
+  # Health check configuration
+  health_check:
+    enabled: true
+    path: "/health"
+    interval: 30
+    timeout: 5
+
+# WebSocket configuration
+websocket:
+  enabled: true
+  port: 8002
+  path: "/ws"
+  max_connections: 1000
+  timeout: 300
+  heartbeat_interval: 30
+  message_size_limit: 1048576  # 1MB
+  
+  # Connection management
+  connection_pool:
+    max_size: 1000
+    idle_timeout: 600
+    cleanup_interval: 60
+
+# Database configuration
+database:
+  type: "postgresql"
+  host: "postgres"
+  port: 5432
+  name: "h2m"
+  username: "h2m"
+  # Password will be read from Vault
+  ssl_mode: "require"
+  max_connections: 20
+  pool_size: 10
+
+# Cache configuration
+cache:
+  type: "redis"
+  host: "redis"
+  port: 6379
+  db: 2
+  ttl: 3600
+
+# Message broker configuration
+pulsar:
+  service_url: "pulsar://pulsar-broker:6650"
+  admin_url: "http://pulsar-admin:8080"
+  topics:
+    human_feedback: "persistent://public/default/q.human.feedback"
+    human_responses: "persistent://public/default/q.human.responses"
+    conversation_events: "persistent://public/default/q.conversations.events"
+    rag_requests: "persistent://public/default/q.rag.requests"
+
+# RAG (Retrieval-Augmented Generation) configuration
+rag:
+  enabled: true
+  max_context_length: 8000
+  similarity_threshold: 0.75
+  max_retrieved_documents: 10
+  reranking_enabled: true
+  
+  # Vector search configuration
+  vector_search:
+    top_k: 20
+    search_type: "similarity"
+    include_metadata: true
+    filter_threshold: 0.7
+  
+  # Context enrichment
+  context_enrichment:
+    enabled: true
+    max_enrichment_docs: 5
+    enrichment_sources: ["knowledgegraph", "vectorstore"]
+
+# Conversation management
+conversation:
+  max_history_length: 100
+  context_window: 10
+  memory_persistence: true
+  session_timeout: 3600
+  
+  # Conversation flow
+  flow:
+    max_turns: 50
+    timeout_per_turn: 120
+    auto_save_interval: 60
+
+# Human-in-the-loop configuration
+human_loop:
+  enabled: true
+  feedback_timeout: 300
+  max_pending_requests: 10
+  escalation_threshold: 3
+  
+  # Clarification requests
+  clarification:
+    enabled: true
+    max_attempts: 3
+    timeout: 180
+    auto_escalate: true
+
+# Service discovery
+services:
+  managerq:
+    url: "http://manager-q:8003"
+    timeout: 30
+  agentq:
+    url: "http://agentq:8000"
+    timeout: 30
+  quantumpulse:
+    url: "http://quantumpulse-api:8000"
+    timeout: 60
+  vectorstore:
+    url: "http://vectorstore-q:8001"
+    timeout: 30
+  knowledgegraph:
+    url: "http://knowledgegraphq:8000"
+    timeout: 30
+
+# Authentication configuration
+auth:
+  enabled: true
+  jwt_secret: "jwt-secret-from-vault"
+  token_expiry: 3600
+  refresh_token_expiry: 86400
+  
+  # OAuth/OIDC configuration
+  oidc:
+    enabled: true
+    issuer: "http://keycloak:8080/realms/q-platform"
+    client_id: "h2m-service"
+    client_secret: "client-secret-from-vault"
+
+# Rate limiting
+rate_limiting:
+  enabled: true
+  requests_per_minute: 100
+  burst_size: 20
+  per_user_limit: 60
+  
+  # Websocket rate limiting
+  websocket:
+    messages_per_minute: 60
+    connection_limit_per_user: 5
+
+# Observability configuration
+observability:
+  metrics:
+    enabled: true
+    port: 9091
+    path: "/metrics"
+  tracing:
+    enabled: true
+    jaeger_endpoint: "http://jaeger-collector:14268"
+  logging:
+    level: "INFO"
+    format: "json"
+    output: "stdout"
+    
+  # Custom metrics
+  custom_metrics:
+    - name: "conversation_duration"
+      type: "histogram"
+      buckets: [1, 5, 10, 30, 60, 120, 300]
+    - name: "active_connections"
+      type: "gauge"
+    - name: "rag_retrieval_time"
+      type: "histogram"
+      buckets: [0.1, 0.5, 1, 2, 5, 10]
+
+# Security configuration
+security:
+  cors:
+    enabled: true
+    allowed_origins: ["*"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allowed_headers: ["*"]
+    credentials: true
+  
+  # Input validation
+  input_validation:
+    enabled: true
+    max_message_length: 10000
+    sanitize_html: true
+    block_scripts: true
+  
+  # Content filtering
+  content_filtering:
+    enabled: true
+    profanity_filter: true
+    spam_detection: true
+    threat_detection: true
+
+# Performance tuning
+performance:
+  worker_threads: 4
+  async_io: true
+  connection_pool_size: 50
+  request_timeout: 30
+  keep_alive_timeout: 5
+  
+  # Caching strategy
+  caching:
+    conversation_cache_ttl: 3600
+    rag_cache_ttl: 1800
+    user_session_cache_ttl: 7200
+
+# Kubernetes configuration
+kubernetes:
+  namespace: "q-platform"
+  service_account: "h2m-service"
+  labels:
+    app: "h2m-service"
+    version: "1.0.0"
+    component: "interface"
+
+# Feature flags
+features:
+  enable_voice_chat: false
+  enable_file_upload: true
+  enable_image_analysis: false
+  enable_collaborative_editing: false
+  enable_multi_language: true
+  enable_sentiment_analysis: true 

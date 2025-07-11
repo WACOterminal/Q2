@@ -1,26 +1,274 @@
-# This configuration simulates a multi-datacenter setup for high availability.
-# It assumes the Helm chart can create statefulsets for multiple datacenters.
-# If it can't, two separate releases would be needed.
+# Apache Cassandra Configuration for Q Platform
+# Production-ready configuration with high availability, security, and monitoring
 
-# Number of nodes in the primary datacenter (this release)
+# --- Global Configuration ---
+global:
+  storageClass: "fast-ssd"
+  
+# --- Cluster Configuration ---
+# Primary datacenter configuration
 replicaCount: 3
 
-# Total number of nodes across all datacenters
-# This is used by the chart to correctly configure gossip.
-# For example, if dc2 has 3 nodes, the total is 6.
-totalReplicaCount: 6 
+# Image configuration
+image:
+  registry: "docker.io"
+  repository: "bitnami/cassandra"
+  tag: "4.1.3"
+  pullPolicy: "IfNotPresent"
 
-config:
-  # These settings are written to cassandra.yaml
-  cassandra.yaml:
-    cluster_name: 'Q-Platform-Cassandra'
-    num_tokens: 256
-    # Use a network-aware snitch for multi-DC
-    endpoint_snitch: 'GossipingPropertyFileSnitch'
-    # Define the datacenters
-    datacenter: 'dc1'
-    rack: 'rack1'
+# --- Resource Configuration ---
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "2Gi"
+  limits:
+    cpu: "2000m"
+    memory: "4Gi"
 
+# --- JVM Configuration ---
+jvm:
+  maxHeapSize: "2G"
+  newHeapSize: "400M"
+  # Garbage collection tuning
+  gcOptions: "-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -XX:MaxGCPauseMillis=200"
+  
+# --- Persistence Configuration ---
 persistence:
   enabled: true
-  size: 10Gi 
+  size: 100Gi
+  storageClass: "fast-ssd"
+  accessMode: "ReadWriteOnce"
+  
+# --- Database Configuration ---
+dbUser:
+  user: "cassandra"
+  password: "cassandra-password-from-vault"
+  
+# --- Cassandra Configuration ---
+cluster:
+  name: "Q-Platform-Cassandra"
+  datacenter: "dc1"
+  rack: "rack1"
+  
+# Cassandra.yaml configuration
+cassandra:
+  # Cluster settings
+  cluster_name: "Q-Platform-Cassandra"
+  num_tokens: 256
+  
+  # Network configuration
+  endpoint_snitch: "GossipingPropertyFileSnitch"
+  
+  # Security settings
+  authenticator: "PasswordAuthenticator"
+  authorizer: "CassandraAuthorizer"
+  role_manager: "CassandraRoleManager"
+  
+  # Performance tuning
+  concurrent_reads: 32
+  concurrent_writes: 32
+  concurrent_counter_writes: 32
+  
+  # Memory settings
+  memtable_allocation_type: "heap_buffers"
+  memtable_heap_space_in_mb: 512
+  memtable_offheap_space_in_mb: 512
+  
+  # Compaction settings
+  compaction_throughput_mb_per_sec: 64
+  concurrent_compactors: 2
+  
+  # Commit log settings
+  commitlog_sync: "periodic"
+  commitlog_sync_period_in_ms: 10000
+  commitlog_segment_size_in_mb: 32
+  
+  # Read/Write settings
+  read_request_timeout_in_ms: 5000
+  range_request_timeout_in_ms: 10000
+  write_request_timeout_in_ms: 2000
+  counter_write_request_timeout_in_ms: 5000
+  cas_contention_timeout_in_ms: 1000
+  truncate_request_timeout_in_ms: 60000
+  request_timeout_in_ms: 10000
+  
+  # Streaming settings
+  stream_throughput_outbound_megabits_per_sec: 200
+  inter_dc_stream_throughput_outbound_megabits_per_sec: 200
+  
+  # Batch settings
+  batch_size_warn_threshold_in_kb: 5
+  batch_size_fail_threshold_in_kb: 50
+  unlogged_batch_across_partitions_warn_threshold: 10
+  
+  # Hinting settings
+  hinted_handoff_enabled: true
+  max_hint_window_in_ms: 10800000  # 3 hours
+  hinted_handoff_throttle_in_kb: 1024
+  max_hints_delivery_threads: 2
+  hints_directory: "/bitnami/cassandra/data/hints"
+  
+  # Snapshot settings
+  snapshot_before_compaction: false
+  auto_snapshot: true
+  
+  # Repair settings
+  repair_session_max_tree_depth: 18
+  repair_session_space_in_mb: 1024
+
+# --- Service Configuration ---
+service:
+  type: "ClusterIP"
+  port: 9042
+  thriftPort: 9160
+  
+  # Annotations for monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+
+# --- Security Configuration ---
+networkPolicy:
+  enabled: true
+  allowExternal: false
+  
+# TLS configuration
+tls:
+  enabled: false  # Enable for production
+  
+# --- Monitoring Configuration ---
+metrics:
+  enabled: true
+  
+  # JMX metrics
+  jmx:
+    enabled: true
+    port: 7199
+    
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    port: 8080
+    path: "/metrics"
+    
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: true
+    namespace: "monitoring"
+    labels:
+      app: "cassandra"
+    interval: "30s"
+    scrapeTimeout: "10s"
+
+# --- Backup Configuration ---
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: "7d"
+  
+# --- Pod Configuration ---
+podSecurityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+containerSecurityContext:
+  enabled: true
+  runAsUser: 1001
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+# --- Scheduling Configuration ---
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: cassandra
+          topologyKey: kubernetes.io/hostname
+
+nodeSelector:
+  node-type: "storage-optimized"
+
+tolerations:
+  - key: "cassandra-workload"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+
+# --- Pod Disruption Budget ---
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# --- Probes Configuration ---
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 5
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 5
+
+# --- Initialization Configuration ---
+initDBConfigMap: ""
+initDBSecret: ""
+
+# --- Keyspace Configuration ---
+keyspaces:
+  - name: "janusgraph"
+    replicationFactor: 3
+    durableWrites: true
+    
+  - name: "q_platform"
+    replicationFactor: 3
+    durableWrites: true
+    
+  - name: "system_traces"
+    replicationFactor: 3
+    durableWrites: true
+
+# --- CQL Scripts ---
+cqlScripts:
+  - name: "create_keyspaces"
+    script: |
+      CREATE KEYSPACE IF NOT EXISTS janusgraph
+      WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+      
+      CREATE KEYSPACE IF NOT EXISTS q_platform
+      WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+      
+      CREATE KEYSPACE IF NOT EXISTS system_traces
+      WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+# --- Logging Configuration ---
+logging:
+  level: "INFO"
+  
+# --- Extra Configuration ---
+extraEnvVars:
+  - name: "CASSANDRA_CLUSTER_NAME"
+    value: "Q-Platform-Cassandra"
+  - name: "CASSANDRA_DC"
+    value: "dc1"
+  - name: "CASSANDRA_RACK"
+    value: "rack1"
+  - name: "CASSANDRA_ENDPOINT_SNITCH"
+    value: "GossipingPropertyFileSnitch"
+  - name: "CASSANDRA_NUM_TOKENS"
+    value: "256" 

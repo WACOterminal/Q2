@@ -1,39 +1,358 @@
-# This configuration simulates a multi-datacenter setup for high availability.
-# In a real multi-region deployment, you would have two separate Pulsar Helm releases,
-# one for each region, and configure them to connect to each other.
-# This file demonstrates the settings required for one of those clusters (e.g., the primary).
+# Apache Pulsar Configuration for Q Platform
+# Production-ready configuration with high availability and monitoring
+
+# --- Global Configuration ---
+global:
+  image:
+    repository: "apachepulsar/pulsar-all"
+    tag: "3.2.0"
+    pullPolicy: "IfNotPresent"
+  
+  # Storage configuration
+  persistence:
+    storageClassName: "fast-ssd"
+    
+  # Anti-affinity for high availability
+  antiAffinity: true
+  
+  # Node selection
+  nodeSelector:
+    node-type: "compute-optimized"
 
 # --- Cluster Metadata ---
-# This identifies the primary cluster and the secondary cluster for replication.
 cluster:
-  name: "pulsar-dc1"
-  # This tells dc1 about dc2
+  name: "pulsar-q-platform"
+  # For multi-region setup
   replication_clusters:
-    - name: "pulsar-dc2"
-      service_url: "pulsar://pulsar-dc2-proxy.q-platform-production.svc.cluster.local:6650"
+    - name: "pulsar-q-platform-backup"
+      service_url: "pulsar://pulsar-backup-proxy.q-platform-backup.svc.cluster.local:6650"
 
-# --- Component Configuration ---
-broker:
-  replicaCount: 2
+# --- Zookeeper Configuration ---
+zookeeper:
+  replicaCount: 3
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+  
+  # Persistence
+  persistence:
+    enabled: true
+    size: "10Gi"
+    storageClassName: "fast-ssd"
+  
+  # JVM configuration
+  jvm:
+    maxHeapSize: "512m"
+    maxDirectMemorySize: "256m"
+    gcOptions: "-XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+  
+  # Configuration
   config:
-    isAllowAutoUpdateSchema: "false"
-    isSchemaValidationEnforced: "true"
-    # Enable replication and set cluster names
-    replicationTlsEnabled: false # Assuming inter-cluster traffic is on a private network
-    clusterName: "pulsar-dc1"
+    tickTime: 2000
+    initLimit: 10
+    syncLimit: 5
+    maxClientCnxns: 60
+    autopurge:
+      snapRetainCount: 3
+      purgeInterval: 1
+      
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+# --- BookKeeper Configuration ---
+bookkeeper:
+  replicaCount: 3
+  
+  # Resource configuration
   resources:
     requests:
       cpu: "500m"
       memory: "1Gi"
     limits:
-      cpu: "1"
+      cpu: "1000m"
       memory: "2Gi"
+  
+  # Persistence
+  persistence:
+    journal:
+      enabled: true
+      size: "10Gi"
+      storageClassName: "fast-ssd"
+    ledgers:
+      enabled: true
+      size: "50Gi"
+      storageClassName: "fast-ssd"
+  
+  # JVM configuration
+  jvm:
+    maxHeapSize: "1g"
+    maxDirectMemorySize: "1g"
+    gcOptions: "-XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+  
+  # Configuration
+  config:
+    # Replication and durability
+    ensembleSize: 3
+    writeQuorumSize: 2
+    ackQuorumSize: 2
+    
+    # Performance tuning
+    journalMaxSizeMB: 2048
+    journalMaxBackups: 5
+    journalAdaptiveGroupWrites: true
+    journalBufferedEntriesThreshold: 5000
+    
+    # Garbage collection
+    gcWaitTime: 300000
+    gcOverreplicatedLedgerWaitTime: 86400000
+    
+    # Storage
+    dbStorage_writeCacheMaxSizeMb: 256
+    dbStorage_readAheadCacheMaxSizeMb: 256
+    
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
 
-zookeeper:
+# --- Broker Configuration ---
+broker:
   replicaCount: 3
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  
+  # JVM configuration
+  jvm:
+    maxHeapSize: "2g"
+    maxDirectMemorySize: "2g"
+    gcOptions: "-XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+  
+  # Configuration
+  config:
+    # Cluster and replication
+    clusterName: "pulsar-q-platform"
+    replicationTlsEnabled: false
+    
+    # Schema validation
+    isAllowAutoUpdateSchema: "false"
+    isSchemaValidationEnforced: "true"
+    
+    # Message retention
+    defaultRetentionTimeInMinutes: 10080  # 7 days
+    defaultRetentionSizeInMB: 1024
+    
+    # Backlog quotas
+    backlogQuotaDefaultLimitGB: 10
+    backlogQuotaDefaultRetentionPolicy: "producer_exception"
+    
+    # Performance tuning
+    maxMessageSize: 5242880  # 5MB
+    maxConcurrentLookupRequest: 50000
+    maxConcurrentTopicLoadRequest: 5000
+    
+    # Load balancing
+    loadBalancerEnabled: true
+    loadBalancerPlacementStrategy: "leastLoadedServer"
+    
+    # Compaction
+    brokerServiceCompactionMonitorIntervalInSeconds: 60
+    brokerServiceCompactionThresholdInBytes: 104857600  # 100MB
+    
+    # Deduplication
+    brokerDeduplicationEnabled: true
+    brokerDeduplicationMaxNumberOfProducers: 10000
+    
+    # Metrics
+    exposeTopicLevelMetricsInPrometheus: true
+    exposeConsumerLevelMetricsInPrometheus: true
+    
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
 
-bookkeeper:
-  replicaCount: 3
-
+# --- Proxy Configuration ---
 proxy:
-  replicaCount: 2 
+  replicaCount: 2
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+  
+  # JVM configuration
+  jvm:
+    maxHeapSize: "512m"
+    maxDirectMemorySize: "256m"
+    gcOptions: "-XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+  
+  # Configuration
+  config:
+    # Connection limits
+    maxConcurrentInboundConnections: 10000
+    maxConcurrentLookupRequests: 50000
+    
+    # Forwarding
+    forwardAuthorizationCredentials: true
+    
+    # WebSocket
+    webSocketServiceEnabled: true
+    
+  # Service configuration
+  service:
+    type: "LoadBalancer"
+    ports:
+      - name: "pulsar"
+        port: 6650
+        targetPort: 6650
+      - name: "http"
+        port: 8080
+        targetPort: 8080
+      - name: "ws"
+        port: 8000
+        targetPort: 8000
+  
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# --- Monitoring Configuration ---
+monitoring:
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    port: 8080
+    path: "/metrics"
+    
+  # Grafana dashboards
+  grafana:
+    enabled: true
+    
+  # AlertManager rules
+  alerting:
+    enabled: true
+    rules:
+      - name: "pulsar-cluster-health"
+        rules:
+          - alert: "PulsarBrokerDown"
+            expr: "up{job='pulsar-broker'} == 0"
+            for: "5m"
+            labels:
+              severity: "critical"
+            annotations:
+              summary: "Pulsar broker is down"
+          - alert: "PulsarHighMemoryUsage"
+            expr: "jvm_memory_used_bytes{job='pulsar-broker'} / jvm_memory_max_bytes{job='pulsar-broker'} > 0.9"
+            for: "10m"
+            labels:
+              severity: "warning"
+            annotations:
+              summary: "Pulsar broker high memory usage"
+
+# --- Security Configuration ---
+security:
+  # TLS configuration
+  tls:
+    enabled: false  # Enable for production
+    
+  # Authentication
+  auth:
+    enabled: false  # Enable for production
+    
+  # Authorization
+  authorization:
+    enabled: false  # Enable for production
+
+# --- Functions Configuration ---
+functions:
+  enabled: true
+  
+  # Function worker configuration
+  worker:
+    replicaCount: 2
+    
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+
+# --- Pulsar Manager Configuration ---
+manager:
+  enabled: true
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "250m"
+      memory: "512Mi"
+  
+  # Service configuration
+  service:
+    type: "ClusterIP"
+    port: 9527
+    
+  # Configuration
+  config:
+    # Admin credentials (should be stored in Vault)
+    adminUsername: "admin"
+    adminPassword: "admin-password-from-vault"
+
+# --- Initialization Configuration ---
+initialization:
+  enabled: true
+  
+  # Initialize namespaces
+  namespaces:
+    - name: "public/default"
+      retention: "7d"
+      replication: []
+    - name: "public/q-platform"
+      retention: "30d"
+      replication: []
+  
+  # Initialize topics
+  topics:
+    - name: "persistent://public/default/q.agentq.registrations"
+      partitions: 3
+    - name: "persistent://public/default/q.agentq.results"
+      partitions: 3
+    - name: "persistent://public/default/q.agentq.thoughts"
+      partitions: 3
+    - name: "persistent://public/default/q.workflows.events"
+      partitions: 5
+    - name: "persistent://public/default/q.tasks.events"
+      partitions: 5
+    - name: "persistent://public/default/q.human.feedback"
+      partitions: 2
+    - name: "persistent://public/default/q.human.responses"
+      partitions: 2
+    - name: "persistent://public/default/q.conversations.events"
+      partitions: 3
+    - name: "persistent://public/default/q.rag.requests"
+      partitions: 3 

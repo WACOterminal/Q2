@@ -1,18 +1,289 @@
-# Keycloak Helm Chart Values
-# Full list of values: https://github.com/bitnami/charts/blob/main/bitnami/keycloak/values.yaml
+# Keycloak Configuration for Q Platform
+# Production-ready identity and access management
 
-# Administrator credentials
-# IMPORTANT: For production, use a pre-existing secret or an external secret management system.
+# --- Image Configuration ---
+image:
+  registry: "quay.io"
+  repository: "keycloak/keycloak"
+  tag: "23.0.3"
+  pullPolicy: "IfNotPresent"
+
+# --- Authentication Configuration ---
 auth:
   adminUser: "admin"
-  adminPassword: "Password123"
+  adminPassword: "keycloak-admin-password-from-vault"
+  
+# --- Database Configuration ---
+postgresql:
+  enabled: true
+  auth:
+    username: "keycloak"
+    password: "keycloak-db-password-from-vault"
+    database: "keycloak"
+  persistence:
+    enabled: true
+    size: "20Gi"
+    storageClass: "fast-ssd"
 
-# Expose Keycloak via a LoadBalancer service for easy access
-# For local dev (e.g., Minikube), you might prefer NodePort or use `kubectl port-forward`
+# --- Service Configuration ---
 service:
-  type: LoadBalancer
+  type: "ClusterIP"
+  port: 8080
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/auth/realms/master/metrics"
 
-# Persist data to a PVC
+# --- Ingress Configuration ---
+ingress:
+  enabled: true
+  ingressClassName: "nginx"
+  hostname: "keycloak.q-platform.local"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+  tls: false
+
+# --- Persistence Configuration ---
 persistence:
   enabled: true
-  size: 10Gi 
+  size: "10Gi"
+  storageClass: "fast-ssd"
+  accessMode: "ReadWriteOnce"
+
+# --- Resource Configuration ---
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"
+
+# --- Scaling Configuration ---
+replicaCount: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# --- Pod Disruption Budget ---
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# --- Java Configuration ---
+javaOpts: >-
+  -Xms1024m
+  -Xmx2048m
+  -XX:+UseG1GC
+  -XX:MaxGCPauseMillis=200
+  -Djava.net.preferIPv4Stack=true
+  -Djboss.modules.system.pkgs=org.jboss.byteman
+  -Djava.awt.headless=true
+
+# --- Keycloak Configuration ---
+keycloakConfigCli:
+  enabled: true
+  image:
+    registry: "docker.io"
+    repository: "adorsys/keycloak-config-cli"
+    tag: "5.9.0"
+  
+  configuration:
+    realm.json: |
+      {
+        "realm": "q-platform",
+        "enabled": true,
+        "displayName": "Q Platform",
+        "registrationAllowed": true,
+        "loginWithEmailAllowed": true,
+        "duplicateEmailsAllowed": false,
+        "resetPasswordAllowed": true,
+        "editUsernameAllowed": false,
+        "bruteForceProtected": true,
+        "permanentLockout": false,
+        "maxFailureWaitSeconds": 900,
+        "minimumQuickLoginWaitSeconds": 60,
+        "waitIncrementSeconds": 60,
+        "quickLoginCheckMilliSeconds": 1000,
+        "maxDeltaTimeSeconds": 43200,
+        "failureFactor": 30,
+        "roles": {
+          "realm": [
+            {
+              "name": "platform-admin",
+              "description": "Q Platform Administrator"
+            },
+            {
+              "name": "platform-user",
+              "description": "Q Platform User"
+            },
+            {
+              "name": "agent-operator",
+              "description": "Agent Operator"
+            },
+            {
+              "name": "workflow-manager",
+              "description": "Workflow Manager"
+            }
+          ]
+        },
+        "clients": [
+          {
+            "clientId": "q-webapp",
+            "enabled": true,
+            "publicClient": true,
+            "redirectUris": [
+              "http://localhost:3000/*",
+              "https://app.q-platform.local/*"
+            ],
+            "webOrigins": [
+              "http://localhost:3000",
+              "https://app.q-platform.local"
+            ],
+            "protocol": "openid-connect",
+            "fullScopeAllowed": true,
+            "defaultRoles": ["platform-user"]
+          },
+          {
+            "clientId": "q-platform-api",
+            "enabled": true,
+            "publicClient": false,
+            "serviceAccountsEnabled": true,
+            "authorizationServicesEnabled": true,
+            "protocol": "openid-connect",
+            "fullScopeAllowed": true,
+            "defaultRoles": ["platform-user"]
+          },
+          {
+            "clientId": "manager-q",
+            "enabled": true,
+            "publicClient": false,
+            "serviceAccountsEnabled": true,
+            "protocol": "openid-connect",
+            "fullScopeAllowed": true
+          },
+          {
+            "clientId": "h2m-service",
+            "enabled": true,
+            "publicClient": false,
+            "serviceAccountsEnabled": true,
+            "protocol": "openid-connect",
+            "fullScopeAllowed": true
+          }
+        ],
+        "identityProviders": [],
+        "userFederationProviders": [],
+        "users": [
+          {
+            "username": "admin",
+            "enabled": true,
+            "firstName": "Platform",
+            "lastName": "Administrator",
+            "email": "admin@q-platform.local",
+            "credentials": [
+              {
+                "type": "password",
+                "value": "admin123",
+                "temporary": true
+              }
+            ],
+            "realmRoles": ["platform-admin"],
+            "clientRoles": {
+              "q-platform-api": ["platform-admin"]
+            }
+          }
+        ]
+      }
+
+# --- Monitoring Configuration ---
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: "monitoring"
+    labels:
+      app: "keycloak"
+    interval: "30s"
+    scrapeTimeout: "10s"
+
+# --- Security Configuration ---
+podSecurityContext:
+  enabled: true
+  fsGroup: 1000
+  runAsUser: 1000
+
+containerSecurityContext:
+  enabled: true
+  runAsUser: 1000
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+# --- Scheduling Configuration ---
+nodeSelector:
+  node-type: "compute-optimized"
+
+tolerations:
+  - key: "keycloak-workload"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+          topologyKey: kubernetes.io/hostname
+
+# --- Probes Configuration ---
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 300
+  periodSeconds: 1
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 1
+  failureThreshold: 3
+  successThreshold: 1
+
+# --- Extra Configuration ---
+extraEnvVars:
+  - name: "KC_HEALTH_ENABLED"
+    value: "true"
+  - name: "KC_METRICS_ENABLED"
+    value: "true"
+  - name: "KC_DB_URL_DATABASE"
+    value: "keycloak"
+  - name: "KC_DB_USERNAME"
+    value: "keycloak"
+  - name: "KC_PROXY"
+    value: "edge"
+  - name: "KC_HOSTNAME_STRICT"
+    value: "false"
+  - name: "KC_HOSTNAME_STRICT_HTTPS"
+    value: "false"
+
+# --- Backup Configuration ---
+backup:
+  enabled: true
+  schedule: "0 3 * * *"  # Daily at 3 AM
+  retention: "30d" 

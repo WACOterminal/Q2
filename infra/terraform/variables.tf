@@ -10,6 +10,12 @@ variable "namespace" {
   default     = "q-platform"
 }
 
+variable "vault_address" {
+  description = "Address of the Vault server"
+  type        = string
+  default     = "http://vault.vault.svc.cluster.local:8200"
+}
+
 variable "pulsar_chart_version" {
   description = "Helm chart version for Apache Pulsar."
   type        = string
@@ -41,9 +47,15 @@ variable "ignite_chart_version" {
 }
 
 variable "flink_chart_version" {
-  description = "Helm chart version for Apache Flink (Bitnami)."
+  description = "Helm chart version for Apache Flink."
   type        = string
-  default     = "0.5.0"
+  default     = "1.7.0"
+}
+
+variable "spark_chart_version" {
+  description = "Helm chart version for Apache Spark."
+  type        = string
+  default     = "1.1.27"
 }
 
 variable "minio_chart_version" {
@@ -97,7 +109,7 @@ variable "seatunnel_chart_version" {
 variable "keycloak_issuer_url" {
   type        = string
   description = "The OIDC issuer URL for the Keycloak realm."
-  default     = "http://localhost:8080/realms/q-platform" # Example default for local dev
+  default     = "http://keycloak.q-platform.svc.cluster.local:8080/realms/q-platform"
 }
 
 variable "primary_region" {
@@ -110,4 +122,22 @@ variable "secondary_region" {
   description = "The secondary region for disaster recovery."
   type        = string
   default     = "us-west-2"
+}
+
+variable "domain_name" {
+  description = "The domain name for the platform"
+  type        = string
+  default     = "q-platform.local"
+}
+
+variable "enable_tls" {
+  description = "Enable TLS for the platform"
+  type        = bool
+  default     = true
+}
+
+variable "storage_class" {
+  description = "Storage class for persistent volumes"
+  type        = string
+  default     = "standard"
 } 
