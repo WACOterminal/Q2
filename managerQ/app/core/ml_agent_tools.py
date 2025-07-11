@@ -34,6 +34,13 @@ from managerQ.app.core.multimodal_ai_service import (
     ModalityType,
     ProcessingTask
 )
+from managerQ.app.core.explainable_ai_service import (
+    explainable_ai_service,
+    ExplanationType,
+    ExplanationMethod,
+    ModelType as XAIModelType,
+    DataType
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +77,14 @@ class MLAgentTools:
             "transcribe_audio": self.transcribe_audio,
             "analyze_sentiment": self.analyze_sentiment,
             "train_model_on_data": self.train_model_on_data,
-            "optimize_workflow": self.optimize_workflow
+            "optimize_workflow": self.optimize_workflow,
+            
+            # XAI tools
+            "generate_shap_explanation": self.generate_shap_explanation,
+            "generate_lime_explanation": self.generate_lime_explanation,
+            "analyze_model_fairness": self.analyze_model_fairness,
+            "generate_counterfactual_explanations": self.generate_counterfactual_explanations,
+            "get_explanation_result": self.get_explanation_result
         }
     
     def get_tool(self, tool_name: str):
@@ -502,6 +516,155 @@ class MLAgentTools:
         
         except Exception as e:
             logger.error(f"Failed to optimize workflow: {e}")
+            return f"Error: {str(e)}"
+    
+    # ===== XAI TOOLS =====
+    
+    async def generate_shap_explanation(
+        self,
+        model_id: str,
+        model_type: str,
+        input_data: List[float],
+        feature_names: Optional[List[str]] = None,
+        class_names: Optional[List[str]] = None,
+        background_data: Optional[List[List[float]]] = None
+    ) -> str:
+        """Generate SHAP explanation for a model prediction"""
+        
+        try:
+            request_id = await explainable_ai_service.generate_explanation(
+                model_id=model_id,
+                model_type=XAIModelType(model_type),
+                data_type=DataType.TABULAR,
+                explanation_type=ExplanationType.LOCAL,
+                explanation_method=ExplanationMethod.SHAP,
+                input_data=input_data,
+                feature_names=feature_names,
+                class_names=class_names,
+                background_data=background_data
+            )
+            
+            return f"SHAP explanation request started: {request_id}"
+        
+        except Exception as e:
+            logger.error(f"Failed to generate SHAP explanation: {e}")
+            return f"Error: {str(e)}"
+    
+    async def generate_lime_explanation(
+        self,
+        model_id: str,
+        model_type: str,
+        input_data: List[float],
+        feature_names: Optional[List[str]] = None,
+        class_names: Optional[List[str]] = None,
+        background_data: Optional[List[List[float]]] = None
+    ) -> str:
+        """Generate LIME explanation for a model prediction"""
+        
+        try:
+            request_id = await explainable_ai_service.generate_explanation(
+                model_id=model_id,
+                model_type=XAIModelType(model_type),
+                data_type=DataType.TABULAR,
+                explanation_type=ExplanationType.LOCAL,
+                explanation_method=ExplanationMethod.LIME,
+                input_data=input_data,
+                feature_names=feature_names,
+                class_names=class_names,
+                background_data=background_data
+            )
+            
+            return f"LIME explanation request started: {request_id}"
+        
+        except Exception as e:
+            logger.error(f"Failed to generate LIME explanation: {e}")
+            return f"Error: {str(e)}"
+    
+    async def analyze_model_fairness(
+        self,
+        model_id: str,
+        model_type: str,
+        test_data: Dict[str, List[Any]],
+        protected_attributes: List[str],
+        target_column: str,
+        prediction_column: str
+    ) -> str:
+        """Analyze model fairness across protected attributes"""
+        
+        try:
+            import pandas as pd
+            
+            # Convert to DataFrame
+            test_df = pd.DataFrame(test_data)
+            
+            request_id = await explainable_ai_service.generate_fairness_analysis(
+                model_id=model_id,
+                model_type=XAIModelType(model_type),
+                test_data=test_df,
+                protected_attributes=protected_attributes,
+                target_column=target_column,
+                prediction_column=prediction_column
+            )
+            
+            return f"Fairness analysis request started: {request_id}"
+        
+        except Exception as e:
+            logger.error(f"Failed to analyze model fairness: {e}")
+            return f"Error: {str(e)}"
+    
+    async def generate_counterfactual_explanations(
+        self,
+        model_id: str,
+        model_type: str,
+        input_data: List[float],
+        feature_names: Optional[List[str]] = None,
+        num_counterfactuals: int = 5
+    ) -> str:
+        """Generate counterfactual explanations for a prediction"""
+        
+        try:
+            request_id = await explainable_ai_service.generate_counterfactual_explanations(
+                model_id=model_id,
+                model_type=XAIModelType(model_type),
+                input_data=input_data,
+                feature_names=feature_names,
+                num_counterfactuals=num_counterfactuals
+            )
+            
+            return f"Counterfactual explanations request started: {request_id}"
+        
+        except Exception as e:
+            logger.error(f"Failed to generate counterfactual explanations: {e}")
+            return f"Error: {str(e)}"
+    
+    async def get_explanation_result(
+        self,
+        request_id: str
+    ) -> str:
+        """Get the result of an explanation request"""
+        
+        try:
+            result = await explainable_ai_service.get_explanation_result(request_id)
+            
+            if result:
+                # Convert result to JSON-serializable format
+                result_dict = {
+                    "request_id": result.request_id,
+                    "explanation_type": result.explanation_type.value,
+                    "explanation_method": result.explanation_method.value,
+                    "explanations": result.explanations,
+                    "metrics": result.metrics,
+                    "interpretation": result.interpretation,
+                    "confidence": result.confidence,
+                    "processing_time": result.processing_time,
+                    "created_at": result.created_at.isoformat()
+                }
+                return json.dumps(result_dict, indent=2)
+            else:
+                return f"No result found for request ID: {request_id}"
+        
+        except Exception as e:
+            logger.error(f"Failed to get explanation result: {e}")
             return f"Error: {str(e)}"
     
     # ===== INTEGRATION HELPERS =====

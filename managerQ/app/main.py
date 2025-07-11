@@ -6,7 +6,7 @@ import yaml
 import structlog
 from contextlib import asynccontextmanager
 
-from managerQ.app.api import tasks, goals, dashboard_ws, agent_tasks, workflows, search, model_registry, planner, user_workflows, observability_ws, ingestion, workflow_generator, reports, governance, ml_capabilities, human_agent_teaming
+from managerQ.app.api import tasks, goals, dashboard_ws, agent_tasks, workflows, search, model_registry, planner, user_workflows, observability_ws, ingestion, workflow_generator, reports, governance, ml_capabilities, human_agent_teaming, explainable_ai, model_deployment, ab_testing, semantic_search, context_aware_decision, predictive_maintenance, edge_ml, adaptive_workflow, quantum_ml
 from managerQ.app.core.agent_registry import AgentRegistry, agent_registry
 from managerQ.app.core.task_dispatcher import TaskDispatcher, task_dispatcher
 from managerQ.app.core.result_listener import ResultListener, result_listener
@@ -32,6 +32,12 @@ from managerQ.app.core.federated_learning_orchestrator import federated_learning
 from managerQ.app.core.automl_service import automl_service
 from managerQ.app.core.reinforcement_learning_service import rl_service
 from managerQ.app.core.multimodal_ai_service import multimodal_ai_service
+from managerQ.app.core.explainable_ai_service import explainable_ai_service
+from managerQ.app.core.ai_governance_service import ai_governance_service
+from managerQ.app.core.predictive_maintenance_service import predictive_maintenance_service
+from managerQ.app.core.edge_ml_service import edge_ml_service
+from managerQ.app.core.adaptive_workflow_service import adaptive_workflow_service
+from managerQ.app.core.quantum_ml_service import quantum_ml_service
 
 # --- Logging and Metrics ---
 setup_logging(service_name=settings.service_name)
@@ -116,6 +122,16 @@ async def lifespan(app: FastAPI):
         await automl_service.initialize()
         await rl_service.initialize()
         await multimodal_ai_service.initialize()
+        await explainable_ai_service.initialize()
+        await ai_governance_service.initialize()
+        await model_deployment.initialize_deployment_api()
+        await ab_testing.initialize_ab_testing_api()
+        await semantic_search.initialize_semantic_search_api()
+        await context_aware_decision.initialize_context_decision_api()
+        await predictive_maintenance_service.initialize()
+        await edge_ml.initialize_edge_ml_api()
+        await adaptive_workflow.initialize_adaptive_workflow_api()
+        await quantum_ml_service.initialize()
         logger.info("ML services initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize ML services: {e}")
@@ -145,6 +161,16 @@ async def lifespan(app: FastAPI):
         await automl_service.shutdown()
         await rl_service.shutdown()
         await multimodal_ai_service.shutdown()
+        await explainable_ai_service.shutdown()
+        await ai_governance_service.shutdown()
+        await model_deployment.shutdown_deployment_api()
+        await ab_testing.shutdown_ab_testing_api()
+        await semantic_search.shutdown_semantic_search_api()
+        await context_aware_decision.shutdown_context_decision_api()
+        await predictive_maintenance_service.shutdown()
+        await edge_ml.shutdown_edge_ml_api()
+        await adaptive_workflow.shutdown_adaptive_workflow_api()
+        await quantum_ml_service.shutdown()
         logger.info("ML services shut down successfully")
     except Exception as e:
         logger.error(f"Error shutting down ML services: {e}")
@@ -192,6 +218,15 @@ app.include_router(reports.router, prefix="/v1/reports", tags=["Reports"])
 app.include_router(governance.router, prefix="/v1/governance", tags=["Governance"])
 app.include_router(ml_capabilities.router, prefix="/v1/ml", tags=["ML Capabilities"])
 app.include_router(human_agent_teaming.router, prefix="/v1/human-agent-teaming", tags=["Human-Agent Teaming"])
+app.include_router(explainable_ai.router, prefix="/v1/xai", tags=["Explainable AI"])
+app.include_router(model_deployment.router, prefix="/v1/deployment", tags=["Model Deployment"])
+app.include_router(ab_testing.router, prefix="/v1/ab-testing", tags=["A/B Testing"])
+app.include_router(semantic_search.router, prefix="/v1/semantic-search", tags=["Semantic Search"])
+app.include_router(context_aware_decision.router, prefix="/v1/context-decision", tags=["Context-Aware Decision"])
+app.include_router(predictive_maintenance.router, prefix="/v1/predictive-maintenance", tags=["Predictive Maintenance"])
+app.include_router(edge_ml.router, prefix="/v1/edge-ml", tags=["Edge ML"])
+app.include_router(adaptive_workflow.router, prefix="/v1/adaptive-workflow", tags=["Adaptive Workflow"])
+app.include_router(quantum_ml.router, prefix="/v1/quantum-ml", tags=["Quantum ML"])
 
 
 @app.get("/health", tags=["Health"])
