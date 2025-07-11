@@ -43,11 +43,12 @@ class WorkflowManager:
                             {'name': 'WORKFLOW_ID', 'type_name': 'java.lang.String'},
                             {'name': 'EVENT_ID', 'type_name': 'java.lang.String'},
                             {'name': 'STATUS', 'type_name': 'java.lang.String'},
-                            # Add other fields you want to query here
+                            {'name': 'ORIGINAL_PROMPT', 'type_name': 'java.lang.String'}, # To query by type
                         ],
                         'indexes': [
                             {'name': 'EVENT_ID_IDX', 'is_unique': False, 'fields': {'EVENT_ID': False}},
                             {'name': 'STATUS_IDX', 'is_unique': False, 'fields': {'STATUS': False}},
+                            {'name': 'PROMPT_IDX', 'is_unique': False, 'fields': {'ORIGINAL_PROMPT': False}}, # NEW
                         ],
                     },
                 ],
@@ -221,6 +222,23 @@ class WorkflowManager:
             return workflows
         except PyIgniteError as e:
             logger.error(f"Failed to query for running workflows: {e}", exc_info=True)
+            return []
+
+    def get_workflows_by_status_and_id(
+        self, status: WorkflowStatus, workflow_id_pattern: str, limit: int = 10
+    ) -> List[Workflow]:
+        """
+        Retrieves workflows matching a status and a workflow_id pattern (using LIKE).
+        """
+        query = f"SELECT * FROM Workflow WHERE status = ? AND workflow_id LIKE ? ORDER BY created_at DESC LIMIT ?"
+        try:
+            cursor = self._cache.sql(query, query_args=[status.value, f"%{workflow_id_pattern}%", limit])
+            # Assuming the result row can be directly converted to the Pydantic model
+            workflows = [Workflow(**dict(zip([d[0] for d in cursor.description], row))) for row in cursor]
+            logger.info(f"Found {len(workflows)} workflows for status '{status.value}' and pattern '{workflow_id_pattern}'")
+            return workflows
+        except PyIgniteError as e:
+            logger.error(f"Failed to query workflows by status and pattern: {e}", exc_info=True)
             return []
 
 # Singleton instance for use across the application

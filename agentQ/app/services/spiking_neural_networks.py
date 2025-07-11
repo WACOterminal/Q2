@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Any, Tuple, Callable
 from dataclasses import asdict, dataclass
 from enum import Enum
 import uuid
-from collections import deque
+from collections import deque, defaultdict
 
 # Q Platform imports
 from app.services.pulsar_service import PulsarService
@@ -140,6 +140,7 @@ class SpikingNeuralNetworksService:
         # Networks and components
         self.networks: Dict[str, SpikingNetwork] = {}
         self.spike_queues: Dict[str, deque] = {}  # Queues for delayed spikes
+        self.detected_anomalies: Dict[str, List[Dict]] = defaultdict(list) # NEW
         
         # Simulation parameters
         self.simulation_config = {
@@ -348,7 +349,7 @@ class SpikingNeuralNetworksService:
         return results
     
     async def _simulate_time_step(self, network: SpikingNetwork, current_time: float) -> List[SpikeEvent]:
-        """Simulate one time step"""
+        """Simulate one time step and check for anomalies."""
         generated_spikes = []
         
         # Process pending spikes
@@ -387,6 +388,36 @@ class SpikingNeuralNetworksService:
                         )
                         self.spike_queues[network.network_id].append(delayed_spike)
         
+        # --- NEW: Anomaly Detection through Surprise ---
+        # 1. Calculate the current firing rate
+        num_spikes_this_step = len(generated_spikes)
+        
+        # 2. Get the expected firing rate (baseline) from homeostatic plasticity
+        # A simple moving average of neuron thresholds can serve as a proxy for baseline activity
+        avg_threshold = np.mean([n.threshold for n in network.neurons.values()])
+        # A lower average threshold implies the network expects more activity.
+        # This is a heuristic and could be made more sophisticated.
+        expected_spikes = (1 - ((avg_threshold - (-60)) / (-40 - (-60)))) * 10 # Heuristic scale
+        
+        # 3. Calculate "Surprise" score
+        surprise = 0
+        if expected_spikes > 0:
+            surprise = (num_spikes_this_step - expected_spikes) / expected_spikes
+        elif num_spikes_this_step > 0:
+            surprise = 1.0 # High surprise if unexpected spikes occur
+
+        # 4. Detect anomaly if surprise is high
+        if surprise > 5.0: # e.g., 500% more spikes than expected
+            anomaly_details = {
+                "timestamp": current_time,
+                "pattern": "Coordinated High-Frequency Burst",
+                "details": f"Detected {num_spikes_this_step} spikes, but expected ~{expected_spikes:.1f}. Surprise factor: {surprise:.2f}.",
+                "severity": min(1.0, surprise / 10.0)
+            }
+            self.detected_anomalies[network.network_id].append(anomaly_details)
+            logger.warning("SNN Anomaly Detected!", anomaly=anomaly_details)
+        # --- End Anomaly Detection ---
+
         # Update network statistics
         network.simulation_time = current_time
         network.total_spikes += len(generated_spikes)

@@ -221,6 +221,68 @@ export const generateWorkflowFromPrompt = async (description: string): Promise<{
     return response.json();
 };
 
+// --- NEW: Report fetching functions ---
+
+export const getFinOpsReport = async (): Promise<any> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+    const response = await fetch(`${API_BASE_URL}/v1/reports/finops`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch FinOps report');
+    return response.json();
+};
+
+export const getSecurityReport = async (): Promise<any> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+    const response = await fetch(`${API_BASE_URL}/v1/reports/security`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch Security report');
+    return response.json();
+};
+
+export const getRCAReports = async (): Promise<any[]> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+    const response = await fetch(`${API_BASE_URL}/v1/reports/rca`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch RCA reports');
+    return response.json();
+};
+
+export const getStrategicBriefing = async (): Promise<any> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+    const response = await fetch(`${API_BASE_URL}/v1/reports/strategic-briefing`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch Strategic Briefing');
+    return response.json();
+};
+
+export const getPredictiveScalingReport = async (): Promise<any[]> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+    const response = await fetch(`${API_BASE_URL}/v1/reports/predictive-scaling`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch Predictive Scaling report');
+    return response.json();
+};
+
 // --- WebSocket Management ---
 
 let dashboardSocketClient: W3CWebSocket | null = null;

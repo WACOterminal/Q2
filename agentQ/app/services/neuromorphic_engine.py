@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import asdict, dataclass
 from enum import Enum
 import uuid
+import json
 
 # Q Platform imports
 from app.services.spiking_neural_networks import (
@@ -145,6 +146,7 @@ class NeuromorphicEngine:
             "average_accuracy": 0.0,
             "adaptation_events": 0
         }
+        self._market_data_consumer = None
     
     async def initialize(self):
         """Initialize the neuromorphic engine"""
@@ -152,6 +154,17 @@ class NeuromorphicEngine:
         
         # Initialize sub-services
         await self.snn_service.initialize()
+        
+        # --- NEW: Subscribe to Market Data Topic ---
+        try:
+            self._market_data_consumer = self.pulsar_service.subscribe(
+                topic='persistent://public/default/market-data',
+                subscription_name='neuromorphic-engine-market-data-sub',
+                callback=self._handle_market_data
+            )
+            logger.info("Subscribed to market data topic.")
+        except Exception as e:
+            logger.error("Failed to subscribe to market data topic", exc_info=True)
         
         # Create sample architectures
         await self._create_sample_architectures()
@@ -360,26 +373,36 @@ class NeuromorphicEngine:
             task.status = "failed"
             task.completed_at = datetime.utcnow()
     
-    async def _encode_input_to_spikes(self, input_data: np.ndarray) -> List[SpikeEvent]:
-        """Convert input data to spike events"""
+    async def _encode_input_to_spikes(self, input_data: np.ndarray, num_input_neurons: int = 100) -> List[SpikeEvent]:
+        """
+        Converts input data to spike events using basis function encoding.
+        Each neuron represents a part of the input's value range.
+        """
         spikes = []
         
-        # Simple rate encoding: higher values = higher spike rates
-        for i, value in enumerate(input_data.flatten()):
-            # Normalize value to spike rate (0-100 Hz)
-            spike_rate = min(100, max(0, value * 100))
+        # Define the value range and basis functions (e.g., for a stock price)
+        min_val, max_val = 100, 2000 # Assumed range for stock prices
+        centers = np.linspace(min_val, max_val, num_input_neurons)
+        width = (max_val - min_val) / num_input_neurons # Width of each neuron's receptive field
+        
+        for value in input_data.flatten():
+            # Find which neuron's "field" the value falls into
+            # Using a Gaussian (bell curve) to determine spike probability
+            distances = np.abs(value - centers)
             
-            # Generate Poisson spike train
-            num_spikes = np.random.poisson(spike_rate / 10)  # For 100ms simulation
+            # The closer a neuron's center is to the value, the higher its spike probability
+            spike_probabilities = np.exp(-(distances**2) / (2 * width**2))
             
-            for _ in range(num_spikes):
-                spike_time = np.random.uniform(0, 100)  # ms
-                spike = SpikeEvent(
-                    neuron_id=f"input_{i}",
-                    timestamp=spike_time,
-                    intensity=1.0
-                )
-                spikes.append(spike)
+            for i, prob in enumerate(spike_probabilities):
+                # Neurons with high probability will fire
+                if np.random.random() < prob:
+                    # The spike time can encode additional information, but we'll keep it simple for now
+                    spike = SpikeEvent(
+                        neuron_id=f"input_{i}",
+                        timestamp=np.random.uniform(0, 10), # Spike within first 10ms
+                        intensity=prob # Intensity can represent confidence
+                    )
+                    spikes.append(spike)
         
         return spikes
     
@@ -481,6 +504,28 @@ class NeuromorphicEngine:
                 
             except Exception as e:
                 logger.error(f"Error in adaptation loop: {e}")
+    
+    async def _handle_market_data(self, msg):
+        """Callback to process incoming market data from Pulsar."""
+        try:
+            data = json.loads(msg.data().decode('utf-8'))
+            logger.debug("Received market data", data=data)
+            
+            # Convert the data to spikes and process it through the network
+            # This is a conceptual link to the next steps.
+            spikes = await self._encode_input_to_spikes(np.array([data['price']]))
+            
+            # Find the relevant network to process this (simplified)
+            for architecture in self.architectures.values():
+                if "AnomalyDetector" in architecture.name:
+                    await self.snn_service.simulate_network(
+                        list(architecture.modules.values())[0].network_ids[0],
+                        spikes,
+                        simulation_time=20.0 # Short simulation for a single tick
+                    )
+                    break # Process with the first found detector for now
+        except Exception as e:
+            logger.error("Failed to handle market data message", exc_info=True)
     
     # ===== HELPER METHODS =====
     

@@ -1,9 +1,10 @@
 import structlog
 import json
-from agentQ.app.core.toolbox import Tool
-from agentQ.app.services.neuromorphic_engine import neuromorphic_engine
 import time
 import random
+from agentQ.app.core.toolbox import Tool
+from agentQ.app.services.neuromorphic_engine import neuromorphic_engine
+from agentQ.app.services.spiking_neural_networks import spiking_neural_networks
 
 logger = structlog.get_logger(__name__)
 
@@ -40,6 +41,7 @@ def configure_snn_for_anomaly_detection(pulsar_topic: str, config: dict = None) 
 def get_snn_anomalies(network_id: str, config: dict = None) -> str:
     """
     Retrieves the latest detected anomalies from a specific SNN.
+    This is a destructive read; anomalies are cleared after being retrieved.
 
     Args:
         network_id (str): The ID of the SNN architecture to query.
@@ -47,20 +49,18 @@ def get_snn_anomalies(network_id: str, config: dict = None) -> str:
     Returns:
         str: A JSON string list of detected anomalies.
     """
-    logger.info("Fetching SNN anomalies", network_id=network_id)
+    logger.info("Fetching SNN anomalies from live engine", network_id=network_id)
     try:
-        # This is a mock response. In a real system, the neuromorphic engine
-        # would maintain a list of detected anomalies.
-        anomalies = [
-            {
-                "timestamp": time.time(),
-                "pattern": "Coordinated price spike",
-                "details": "Symbols AAPL, MSFT, GOOGL spiked simultaneously.",
-                "severity": 0.85
-            }
-        ] if random.random() < 0.2 else [] # 20% chance to report an anomaly
-
+        # --- NEW: Call the real SNN service ---
+        anomalies = spiking_neural_networks.detected_anomalies.get(network_id, [])
+        
+        if anomalies:
+            # Clear the anomalies list after retrieving them to prevent re-reporting
+            spiking_neural_networks.detected_anomalies[network_id] = []
+            logger.warning(f"Retrieved {len(anomalies)} new anomalies.", network_id=network_id)
+        
         return json.dumps(anomalies)
+        
     except Exception as e:
         logger.error("Failed to fetch SNN anomalies", exc_info=True)
         return f"Error: An unexpected error occurred while fetching SNN anomalies: {e}"

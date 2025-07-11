@@ -1,45 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, Typography, CircularProgress, Box, Chip, Tooltip } from '@mui/material';
+import { Card, CardContent, Typography, CircularProgress, Box, Tooltip } from '@mui/material';
 import { Timeline, TimelineItem, TimelineSeparator, TimelineConnector, TimelineContent, TimelineDot, timelineOppositeContent, TimelineOppositeContent } from '@mui/lab';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-
-// Placeholder data
-const placeholderEvents = [
-    {
-        time: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-        type: 'forecast',
-        details: 'Load predicted to increase by 40% in the next hour.'
-    },
-    {
-        time: new Date(Date.now() - 3600 * 1000 * 1.9).toISOString(),
-        type: 'action',
-        details: 'Scaled up QuantumPulse replicas from 3 to 4.',
-        icon: 'up'
-    },
-    {
-        time: new Date(Date.now() - 3600 * 1000 * 1).toISOString(),
-        type: 'forecast',
-        details: 'Load predicted to decrease by 30% after peak hours.'
-    },
-    {
-        time: new Date(Date.now() - 3600 * 1000 * 0.5).toISOString(),
-        type: 'action',
-        details: 'Scaled down QuantumPulse replicas from 4 to 3.',
-        icon: 'down'
-    }
-];
+import { getPredictiveScalingReport } from '../../services/managerAPI'; // Assuming this exists
 
 export function PredictiveScalingWidget() {
     const [events, setEvents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        setTimeout(() => {
-            setEvents(placeholderEvents.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
-            setLoading(false);
-        }, 1200);
+        const fetchReport = async () => {
+            try {
+                setLoading(true);
+                const data = await getPredictiveScalingReport();
+                setEvents(data.sort((a: any, b: any) => new Date(b.time).getTime() - new Date(a.time).getTime()));
+            } catch (err) {
+                setError((err as Error).message);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchReport();
     }, []);
 
     const getIcon = (event: any) => {
@@ -57,7 +41,9 @@ export function PredictiveScalingWidget() {
                 </Typography>
                 {loading ? (
                     <CircularProgress />
-                ) : (
+                ) : error ? (
+                    <Typography color="error">Failed to load activity: {error}</Typography>
+                ): (
                     <Timeline position="right" sx={{ p: 0 }}>
                         {events.map((event, index) => (
                             <TimelineItem key={index}>
