@@ -1,9 +1,13 @@
 # managerQ/tests/test_workflow_executor.py
 import pytest
-from unittest.mock import MagicMock, patch
+import asyncio
+import time
+from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch, Mock
+from collections import defaultdict
 
 from managerQ.app.core.workflow_executor import WorkflowExecutor
-from managerQ.app.models import Workflow, ApprovalBlock, WorkflowTask, TaskStatus, WorkflowStatus
+from managerQ.app.models import Workflow, ApprovalBlock, WorkflowTask, TaskStatus, WorkflowStatus, ConditionalBlock, ConditionalBranch
 
 @pytest.fixture
 def mock_workflow_manager():
@@ -21,12 +25,17 @@ def executor():
     # Its internal loop won't be started
     return WorkflowExecutor()
 
-def test_approval_block_pauses_workflow(executor, mock_workflow_manager):
+def test_approval_block_pauses_workflow(executor, mock_workflow_manager, mock_task_dispatcher):
     """
     Tests that an ApprovalBlock transitions to PENDING_APPROVAL and doesn't dispatch subsequent tasks.
     """
     approval_task = ApprovalBlock(task_id="approve_1", message="Approve?")
-    dependent_task = WorkflowTask(task_id="task_2", prompt="Do stuff", dependencies=["approve_1"])
+    dependent_task = WorkflowTask(
+        task_id="task_2", 
+        agent_personality="default",
+        prompt="Do stuff", 
+        dependencies=["approve_1"]
+    )
     
     workflow = Workflow(
         workflow_id="wf_approve_test",
@@ -34,7 +43,7 @@ def test_approval_block_pauses_workflow(executor, mock_workflow_manager):
         tasks=[approval_task, dependent_task]
     )
 
-    executor._process_blocks(workflow.tasks, workflow)
+    asyncio.run(executor._process_blocks(workflow.tasks, workflow))
 
     # Assert that the approval task's status was updated to PENDING_APPROVAL
     mock_workflow_manager.update_task_status.assert_called_once_with(
@@ -47,9 +56,16 @@ def test_conditional_task_is_skipped(executor, mock_workflow_manager, mock_task_
     """
     Tests that a task with a falsy condition is skipped (marked as CANCELLED).
     """
-    task1 = WorkflowTask(task_id="task_1", prompt="Initial task", status=TaskStatus.COMPLETED, result="some_value")
+    task1 = WorkflowTask(
+        task_id="task_1", 
+        agent_personality="default",
+        prompt="Initial task", 
+        status=TaskStatus.COMPLETED, 
+        result="some_value"
+    )
     task2_conditional = WorkflowTask(
         task_id="task_2",
+        agent_personality="default",
         prompt="Conditional task",
         dependencies=["task_1"],
         condition="{{ tasks.task_1.result == 'different_value' }}" # This will be false
@@ -62,7 +78,7 @@ def test_conditional_task_is_skipped(executor, mock_workflow_manager, mock_task_
         shared_context={}
     )
     
-    executor.process_workflow(workflow)
+    asyncio.run(executor.process_workflow(workflow))
 
     # Assert that the conditional task was marked as CANCELLED
     mock_workflow_manager.update_task_status.assert_called_with(
@@ -75,9 +91,16 @@ def test_conditional_task_is_dispatched(executor, mock_workflow_manager, mock_ta
     """
     Tests that a task with a truthy condition is dispatched correctly.
     """
-    task1 = WorkflowTask(task_id="task_1", prompt="Initial task", status=TaskStatus.COMPLETED, result='{"key": "value"}')
+    task1 = WorkflowTask(
+        task_id="task_1", 
+        agent_personality="default",
+        prompt="Initial task", 
+        status=TaskStatus.COMPLETED, 
+        result='{"key": "value"}'
+    )
     task2_conditional = WorkflowTask(
         task_id="task_2",
+        agent_personality="default",
         prompt="Conditional task",
         dependencies=["task_1"],
         condition="{{ tasks.task_1.key == 'value' }}" # This will be true
@@ -90,7 +113,7 @@ def test_conditional_task_is_dispatched(executor, mock_workflow_manager, mock_ta
         shared_context={}
     )
 
-    executor.process_workflow(workflow)
+    asyncio.run(executor.process_workflow(workflow))
     
     # Assert that the conditional task was dispatched
     mock_task_dispatcher.dispatch_task.assert_called_once() 

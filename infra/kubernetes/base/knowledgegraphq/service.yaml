@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: knowledgegraphq
+  labels:
+    app: knowledgegraphq
+    component: service
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8000
+    targetPort: 8000
+  - name: api
+    protocol: TCP
+    port: 8004
+    targetPort: 8004
+  - name: admin
+    protocol: TCP
+    port: 8005
+    targetPort: 8005
+  - name: metrics
+    protocol: TCP
+    port: 9091
+    targetPort: 9091
+  selector:
+    app: knowledgegraphq
+---
+# Service for GraphQL API
+apiVersion: v1
+kind: Service
+metadata:
+  name: knowledgegraph-api
+  labels:
+    app: knowledgegraphq
+    component: service
+    service-type: graphql
+spec:
+  type: ClusterIP
+  ports:
+  - name: api
+    protocol: TCP
+    port: 8004
+    targetPort: 8004
+  selector:
+    app: knowledgegraphq 

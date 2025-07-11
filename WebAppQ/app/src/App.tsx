@@ -1,152 +1,173 @@
-import React, { useContext, useState, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
-import { Box, Typography, AppBar, Toolbar, Button, CircularProgress, Container } from '@mui/material';
-import { AuthContext, AuthProvider } from './AuthContext';
-import Chat from './components/Chat/Chat';
-import { WorkflowsPage } from './pages/WorkflowsPage';
-import { MyWorkflowsPage } from './pages/MyWorkflowsPage';
-import { WorkflowDetailPage } from './pages/WorkflowDetailPage';
-import { SearchPage } from './pages/SearchPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { ApprovalsPage } from './pages/ApprovalsPage';
-import { WorkflowStudioPage } from './pages/WorkflowStudioPage';
-import { ToastNotification } from './components/common/ToastNotification';
-import { connectToDashboardSocket, disconnectFromDashboardSocket } from './services/managerAPI';
-import GoalsPage from './pages/GoalsPage'; // Import the new Goals page
-import GoalDetailPage from './pages/GoalDetailPage'; // Import the new Goal Detail page
-import { GettingStartedPage } from './pages/GettingStartedPage';
-import Integrations from './pages/Integrations';
-import { DataSourcesPage } from './pages/DataSourcesPage';
-import { ProactiveSuggestionToast } from './components/common/ProactiveSuggestionToast'; // NEW
+import React, { useEffect, useState, useContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link as RouterLink, useNavigate } from 'react-router-dom';
+import { AppBar, Toolbar, Typography, Button, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, CssBaseline } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
+import HomeIcon from '@mui/icons-material/Home';
+import ChatIcon from '@mui/icons-material/Chat';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import InsightsIcon from '@mui/icons-material/Insights';
+import GraphIcon from '@mui/icons-material/DataObject'; // Using DataObject for Knowledge Graph
+import CodeIcon from '@mui/icons-material/Code'; // Using Code for Agent Sandbox
+import PolicyIcon from '@mui/icons-material/Policy'; // For Governance
+import QueryStatsIcon from '@mui/icons-material/QueryStats'; // For MLOps Dashboard
+import AuthContext from './AuthContext';
+import Chat from './pages/Chat';
+import Home from './pages/Home';
+import WorkflowVisualizer from './pages/WorkflowVisualizer';
+import KnowledgeGraph from './pages/KnowledgeGraph';
+import AgentSandbox from './pages/AgentSandbox';
+import Governance from './pages/Governance';
+import MLDashboard from './pages/MLDashboard'; // Import the new MLDashboard component
 
-function Home() {
-  const authContext = useContext(AuthContext);
-  return (
-    <Container maxWidth="md" sx={{ textAlign: 'center', mt: 8 }}>
-      <Typography variant="h2" component="h1" gutterBottom>
-        Welcome to the Q Platform
-      </Typography>
-      <Typography variant="h5" sx={{ mb: 4 }}>
-        An advanced, AI-powered platform for the future.
-      </Typography>
-      {!authContext?.isAuthenticated && (
-        <Box>
-            <Button variant="contained" size="large" onClick={() => authContext?.login()}>Login</Button>
-            <Button variant="outlined" size="large" component={Link} to="/register" sx={{ ml: 2 }}>Register</Button>
-        </Box>
-      )}
-    </Container>
-  );
+const drawerWidth = 240;
+
+interface NavItem {
+  text: string;
+  icon: React.ReactElement;
+  path: string;
 }
 
-function App() {
-  const authContext = useContext(AuthContext);
-  const [toast, setToast] = useState<{ open: boolean, message: string, title: string }>({ open: false, message: '', title: '' });
+const navItems: NavItem[] = [
+  { text: 'Home', icon: <HomeIcon />, path: '/' },
+  { text: 'Chat', icon: <ChatIcon />, path: '/chat' },
+  { text: 'Workflows', icon: <AccountTreeIcon />, path: '/workflows' },
+  { text: 'Knowledge Graph', icon: <GraphIcon />, path: '/knowledge-graph' },
+  { text: 'Agent Sandbox', icon: <CodeIcon />, path: '/agent-sandbox' },
+  { text: 'Governance', icon: <PolicyIcon />, path: '/governance' },
+  { text: 'MLOps Dashboard', icon: <QueryStatsIcon />, path: '/mlops-dashboard' }, // Add MLOps Dashboard link
+];
+
+const App: React.FC = () => {
+  const { keycloak, authenticated } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAuthChecked, setIsAuthChecked] = useState(false); // New state to track if auth check is done
 
   useEffect(() => {
-      if (authContext?.isAuthenticated) {
-          const handleSocketMessage = (data: any) => {
-              if (data.event_type === "APPROVAL_REQUIRED") {
-                  setToast({
-                      open: true,
-                      title: "Action Required",
-                      message: `An approval is waiting for you: ${data.data.message}`
-                  });
-              }
-          };
-          connectToDashboardSocket(handleSocketMessage);
+    // This effect ensures navigation happens only once after authentication state is confirmed
+    if (keycloak && typeof authenticated === 'boolean') {
+      setIsAuthChecked(true);
+      if (authenticated) {
+        // Optionally navigate to a default authenticated route or just stay
+        console.log('User is authenticated. Token:', keycloak.tokenParsed);
+      } else {
+        // If not authenticated, ensure we are at the base path or handle login
+        console.log('User is not authenticated.');
+        // keycloak.login(); // Uncomment to force login if needed
       }
-      return () => {
-          disconnectFromDashboardSocket();
-      };
-  }, [authContext]);
+    }
+  }, [keycloak, authenticated, navigate]);
 
-  const handleCloseToast = () => {
-      setToast({ ...toast, open: false });
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
   };
 
-  if (!authContext?.isAuthenticated) {
-    // This is shown while the Keycloak adapter initializes.
-    // If the user is not logged in, they will be redirected by Keycloak.
-    // If they are logged in, the app will render.
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
-        <CircularProgress />
-        <Typography ml={2}>Loading...</Typography>
-      </Box>
-    );
+  const handleLogout = () => {
+    keycloak?.logout({
+      redirectUri: window.location.origin, // Redirects to the root of your app after logout
+    });
+  };
+
+  const drawer = (
+    <Box onClick={handleDrawerToggle} sx={{ textAlign: 'center' }}>
+      <Typography variant="h6" sx={{ my: 2 }}>
+        Q Platform
+      </Typography>
+      <Divider />
+      <List>
+        {navItems.map((item) => (
+          <ListItem key={item.text} disablePadding>
+            <ListItemButton component={RouterLink} to={item.path} sx={{ textAlign: 'left' }}>
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
+
+  // Only render content after authentication status is checked
+  if (!isAuthChecked) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading authentication...</Box>;
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: '#f5f5f5' }}>
-      <ToastNotification
-          open={toast.open}
-          onClose={handleCloseToast}
-          title={toast.title}
-          message={toast.message}
-      />
-      <ProactiveSuggestionToast /> {/* NEW */}
-      <AppBar position="static">
+    <Box sx={{ display: 'flex' }}>
+      <CssBaseline />
+      <AppBar component="nav" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>Q Platform</Link>
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            edge="start"
+            onClick={handleDrawerToggle}
+            sx={{ mr: 2, display: { sm: 'none' } }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }}
+          >
+            Q Platform
           </Typography>
-          <Button color="inherit" component={Link} to="/chat">Chat</Button>
-          <Button color="inherit" component={Link} to="/goals">Goals</Button>
-          <Button color="inherit" component={Link} to="/workflows">My Workflows</Button>
-          <Button color="inherit" component={Link} to="/search">Search</Button>
-          <Button color="inherit" component={Link} to="/approvals">Approvals</Button>
-          <Button color="inherit" component={Link} to="/studio">Studio</Button>
-          <Button color="inherit" component={Link} to="/integrations">Integrations</Button>
-          <Button color="inherit" component={Link} to="/data-sources">Data Sources</Button>
-          <Button color="inherit" component={Link} to="/getting-started">Getting Started</Button>
-          <Button color="inherit" onClick={() => authContext.logout && authContext.logout()}>Logout</Button>
+          <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+            {authenticated ? (
+              <Button color="inherit" onClick={handleLogout}>
+                Logout
+              </Button>
+            ) : (
+              <Button color="inherit" onClick={() => keycloak?.login()}>
+                Login
+              </Button>
+            )}
+          </Box>
         </Toolbar>
       </AppBar>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/approvals" element={<RequireAuth><ApprovalsPage /></RequireAuth>} />
-        <Route path="/studio" element={<RequireAuth><WorkflowStudioPage /></RequireAuth>} />
-        <Route path="/chat" element={<RequireAuth><Chat /></RequireAuth>} />
-        <Route path="/workflows" element={<RequireAuth><MyWorkflowsPage /></RequireAuth>} />
-        <Route path="/workflows/:workflowId" element={<RequireAuth><WorkflowDetailPage /></RequireAuth>} />
-        <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
-        <Route path="/goals" element={<RequireAuth><GoalsPage /></RequireAuth>} />
-        <Route path="/goals/:goalId" element={<RequireAuth><GoalDetailPage /></RequireAuth>} />
-        <Route path="/getting-started" element={<GettingStartedPage />} />
-        <Route path="/integrations" element={<RequireAuth><Integrations /></RequireAuth>} />
-        <Route path="/data-sources" element={<RequireAuth><DataSourcesPage /></RequireAuth>} />
-      </Routes>
+      <Box component="nav">
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          ModalProps={{
+            keepMounted: true, // Better open performance on mobile.
+          }}
+          sx={{
+            display: { xs: 'block', sm: 'none' },
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+          }}
+        >
+          {drawer}
+        </Drawer>
+        <Drawer
+          variant="permanent"
+          sx={{
+            display: { xs: 'none', sm: 'block' },
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+          }}
+          open
+        >
+          <Toolbar /> {/* Spacer for AppBar */}
+          {drawer}
+        </Drawer>
+      </Box>
+      <Box component="main" sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}>
+        <Toolbar /> {/* Spacer for AppBar */}
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/chat" element={authenticated ? <Chat /> : <Typography>Please login to access the chat.</Typography>} />
+          <Route path="/workflows" element={authenticated ? <WorkflowVisualizer /> : <Typography>Please login to access workflows.</Typography>} />
+          <Route path="/knowledge-graph" element={authenticated ? <KnowledgeGraph /> : <Typography>Please login to access the knowledge graph.</Typography>} />
+          <Route path="/agent-sandbox" element={authenticated ? <AgentSandbox /> : <Typography>Please login to access the agent sandbox.</Typography>} />
+          <Route path="/governance" element={authenticated ? <Governance /> : <Typography>Please login to access governance.</Typography>} />
+          <Route path="/mlops-dashboard" element={authenticated ? <MLDashboard /> : <Typography>Please login to access the MLOps Dashboard.</Typography>} /> {/* Add MLDashboard route */}
+          {/* Add other routes here */}
+        </Routes>
+      </Box>
     </Box>
   );
-}
+};
 
-function RequireAuth({ children }: { children: React.ReactElement }) {
-  const authContext = useContext(AuthContext);
-  const location = useLocation();
-
-  if (!authContext?.isAuthenticated) {
-    // Redirect them to the / page, but save the current location they were
-    // trying to go to. This allows us to send them along to that page after they
-    // log in, which is a common UX pattern.
-    return <Navigate to="/" state={{ from: location }} replace />;
-  }
-  return children;
-}
-
-// Wrap the entire app logic in the Router
-const AppContainer = () => (
-    <Router>
-        <App />
-    </Router>
-)
-
-// Wrap App with AuthProvider
-const AppWithAuth = () => (
-  <AuthProvider>
-    <AppContainer />
-  </AuthProvider>
-);
-
-export default AppWithAuth;
+export default App;

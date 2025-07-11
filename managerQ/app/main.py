@@ -6,7 +6,7 @@ import yaml
 import structlog
 from contextlib import asynccontextmanager
 
-from managerQ.app.api import tasks, goals, dashboard_ws, agent_tasks, workflows, search, model_registry, planner, user_workflows, observability_ws, ingestion, workflow_generator, reports, governance
+from managerQ.app.api import tasks, goals, dashboard_ws, agent_tasks, workflows, search, model_registry, planner, user_workflows, observability_ws, ingestion, workflow_generator, reports, governance, ml_capabilities
 from managerQ.app.core.agent_registry import AgentRegistry, agent_registry
 from managerQ.app.core.task_dispatcher import TaskDispatcher, task_dispatcher
 from managerQ.app.core.result_listener import ResultListener, result_listener
@@ -26,6 +26,12 @@ from shared.q_knowledgegraph_client.client import KnowledgeGraphClient
 from shared.q_pulse_client.client import QuantumPulseClient
 from managerQ.app.core.user_workflow_store import user_workflow_store
 from shared.pulsar_client import shared_pulsar_client
+
+# ML Services
+from managerQ.app.core.federated_learning_orchestrator import federated_learning_orchestrator
+from managerQ.app.core.automl_service import automl_service
+from managerQ.app.core.reinforcement_learning_service import rl_service
+from managerQ.app.core.multimodal_ai_service import multimodal_ai_service
 
 # --- Logging and Metrics ---
 setup_logging(service_name=settings.service_name)
@@ -103,6 +109,18 @@ async def lifespan(app: FastAPI):
     proactive_goal_monitor.start()
     autoscaler.start()
     
+    # Initialize ML services
+    try:
+        logger.info("Initializing ML services...")
+        await federated_learning_orchestrator.initialize()
+        await automl_service.initialize()
+        await rl_service.initialize()
+        await multimodal_ai_service.initialize()
+        logger.info("ML services initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize ML services: {e}")
+        # Continue without ML services for now
+    
     platform_events_topic = getattr(settings.pulsar.topics, 'platform_events', 'persistent://public/default/platform-events')
     event_listener_instance = EventListener(settings.pulsar.service_url, platform_events_topic)
     import threading
@@ -119,6 +137,17 @@ async def lifespan(app: FastAPI):
     workflow_executor.stop()
     proactive_goal_monitor.stop()
     autoscaler.stop()
+    
+    # Shutdown ML services
+    try:
+        logger.info("Shutting down ML services...")
+        await federated_learning_orchestrator.shutdown()
+        await automl_service.shutdown()
+        await rl_service.shutdown()
+        await multimodal_ai_service.shutdown()
+        logger.info("ML services shut down successfully")
+    except Exception as e:
+        logger.error(f"Error shutting down ML services: {e}")
 
     # Close the shared pulsar client
     shared_pulsar_client.close()
@@ -161,6 +190,7 @@ app.include_router(ingestion.router, prefix="/v1/ingestion", tags=["Ingestion"])
 app.include_router(workflow_generator.router, prefix="/v1/workflows", tags=["Workflows"])
 app.include_router(reports.router, prefix="/v1/reports", tags=["Reports"])
 app.include_router(governance.router, prefix="/v1/governance", tags=["Governance"])
+app.include_router(ml_capabilities.router, prefix="/v1/ml", tags=["ML Capabilities"])
 
 
 @app.get("/health", tags=["Health"])

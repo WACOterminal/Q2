@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: userprofileq-pdb
+  labels:
+    app: userprofileq
+    component: availability
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: userprofileq 

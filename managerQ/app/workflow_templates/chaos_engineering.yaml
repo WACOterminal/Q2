@@ -5,12 +5,95 @@ shared_context:
   scenario_to_run: "multi_agent_workflow_test"
 
 tasks:
+  - task_id: "prepare_chaos_environment"
+    type: "task"
+    agent_personality: "scenario_architect"
+    prompt: |
+      Prepare the environment for chaos engineering testing.
+      
+      Scenario to execute: '{{ shared_context.scenario_to_run }}'
+      
+      1. **Baseline Metrics**: Capture current system performance metrics
+      2. **Health Checks**: Verify all services are healthy before testing
+      3. **Monitoring Setup**: Configure enhanced monitoring for the test
+      4. **Rollback Plan**: Establish rollback procedures in case of issues
+      
+      Return environment readiness status and baseline metrics.
+    dependencies: []
+
   - task_id: "execute_chaos_scenario"
     type: "task"
     agent_personality: "scenario_architect"
     prompt: |
-      You are to execute a chaos engineering test.
-      Your mission is to run the scenario named '{{ shared_context.scenario_to_run }}' using the `run_simulation_scenario` tool.
+      Execute the chaos engineering scenario with proper monitoring.
       
-      The full, unmodified JSON report from the simulation tool must be your final answer.
-    dependencies: [] 
+      Environment status: {{ tasks.prepare_chaos_environment.result }}
+      Scenario: '{{ shared_context.scenario_to_run }}'
+      
+      Use the `run_simulation_scenario` tool to execute the test while:
+      1. **Continuous Monitoring**: Track system behavior during chaos
+      2. **Safety Limits**: Monitor for critical failure thresholds
+      3. **Data Collection**: Gather comprehensive performance data
+      4. **Real-time Analysis**: Assess system resilience patterns
+      
+      Return the complete simulation results and behavioral analysis.
+    dependencies: ["prepare_chaos_environment"]
+
+  - task_id: "analyze_resilience_results"
+    type: "task"
+    agent_personality: "scenario_architect"
+    prompt: |
+      Analyze the chaos engineering results for system resilience insights.
+      
+      Chaos test results:
+      {{ tasks.execute_chaos_scenario.result }}
+      
+      Baseline metrics:
+      {{ tasks.prepare_chaos_environment.result }}
+      
+      Perform comprehensive analysis:
+      1. **Failure Patterns**: Identify how system components failed
+      2. **Recovery Times**: Measure time to recover from disruptions
+      3. **Cascade Effects**: Track how failures propagated through system
+      4. **Resilience Gaps**: Identify weak points in system architecture
+      5. **Performance Impact**: Quantify degradation during chaos
+      
+      Generate detailed resilience assessment report.
+    dependencies: ["execute_chaos_scenario"]
+
+  - task_id: "generate_improvement_recommendations"
+    type: "task"
+    agent_personality: "scenario_architect"
+    prompt: |
+      Generate actionable recommendations based on chaos engineering results.
+      
+      Resilience analysis:
+      {{ tasks.analyze_resilience_results.result }}
+      
+      Create improvement recommendations:
+      1. **Critical Issues**: Priority fixes for major resilience gaps
+      2. **Architecture Changes**: Structural improvements for better fault tolerance
+      3. **Monitoring Enhancements**: Better observability for failure detection
+      4. **Process Improvements**: Updated incident response procedures
+      5. **Testing Strategy**: Ongoing chaos engineering practice recommendations
+      
+      Format as actionable items with priority levels and estimated effort.
+    dependencies: ["analyze_resilience_results"]
+
+  - task_id: "create_remediation_tickets"
+    type: "task"
+    agent_personality: "scenario_architect"
+    prompt: |
+      Create tickets for critical resilience improvements identified.
+      
+      Improvement recommendations:
+      {{ tasks.generate_improvement_recommendations.result }}
+      
+      For each high-priority recommendation:
+      1. **Create Ticket**: Use openproject_create_ticket tool
+      2. **Include Context**: Reference chaos test results and analysis
+      3. **Set Priority**: Mark critical items as high priority
+      4. **Assign Teams**: Route to appropriate engineering teams
+      
+      Return summary of created tickets and tracking information.
+    dependencies: ["generate_improvement_recommendations"] 

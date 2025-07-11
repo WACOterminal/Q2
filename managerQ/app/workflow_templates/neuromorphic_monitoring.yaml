@@ -5,15 +5,119 @@ shared_context:
   market_data_topic: "persistent://public/default/market-data"
 
 tasks:
-  - task_id: "start_snn_monitoring"
+  - task_id: "configure_snn"
     type: "task"
     agent_personality: "neuromorphic_analyst"
     prompt: |
-      Your mission is to provide continuous, real-time anomaly detection of a high-frequency data stream.
-
-      1.  **Configure the SNN**: Your first step is to configure the Spiking Neural Network to monitor the topic specified in the shared context: `{{ shared_context.market_data_topic }}`. Use the appropriate tool.
-      2.  **Enter Monitoring Loop**: Once the network is configured, you must repeatedly use the `get_snn_anomalies` tool to check for threats.
-      3.  **Report Immediately**: If you detect any anomalies, your task is complete. You must immediately report the JSON output from the tool as your final answer.
+      Configure the Spiking Neural Network for real-time market monitoring.
       
-      This is a long-running, critical task. Begin.
-    dependencies: [] 
+      Topic to monitor: `{{ shared_context.market_data_topic }}`
+      
+      Use the appropriate SNN configuration tool to:
+      1. Set up the network topology for market data patterns
+      2. Configure spike thresholds for anomaly detection
+      3. Initialize learning parameters for adaptation
+      4. Establish baseline patterns from historical data
+      
+      Return the SNN configuration status and initial parameters.
+    dependencies: []
+
+  - task_id: "establish_baseline"
+    type: "task"
+    agent_personality: "neuromorphic_analyst"
+    prompt: |
+      Establish baseline patterns for normal market behavior.
+      
+      Using the configured SNN from previous task:
+      {{ tasks.configure_snn.result }}
+      
+      1. **Data Collection**: Gather recent historical market data
+      2. **Pattern Learning**: Train the SNN on normal market patterns
+      3. **Threshold Calibration**: Set anomaly detection thresholds
+      4. **Validation**: Test detection accuracy on known anomalous events
+      
+      Return baseline establishment results and detection readiness status.
+    dependencies: ["configure_snn"]
+
+  - task_id: "continuous_monitoring"
+    type: "conditional"
+    dependencies: ["establish_baseline"]
+    branches:
+      - condition: "true"
+        tasks:
+          - task_id: "monitor_market_stream"
+            type: "task"
+            agent_personality: "neuromorphic_analyst"
+            prompt: |
+              Begin continuous real-time monitoring of market data stream.
+              
+              Monitoring configuration:
+              {{ tasks.establish_baseline.result }}
+              
+              Continuously:
+              1. **Stream Analysis**: Process incoming market data through SNN
+              2. **Anomaly Detection**: Use `get_snn_anomalies` tool to identify threats
+              3. **Pattern Learning**: Adapt to evolving market conditions
+              4. **Threshold Adjustment**: Dynamic threshold optimization
+              
+              Report any detected anomalies immediately.
+            dependencies: []
+
+          - task_id: "anomaly_assessment"
+            type: "conditional"
+            dependencies: ["monitor_market_stream"]
+            branches:
+              - condition: "{{ 'anomaly_detected' in tasks.monitor_market_stream.result|lower }}"
+                tasks:
+                  - task_id: "analyze_anomaly"
+                    type: "task"
+                    agent_personality: "neuromorphic_analyst"
+                    prompt: |
+                      Critical anomaly detected in market data stream.
+                      
+                      Anomaly details:
+                      {{ tasks.monitor_market_stream.result }}
+                      
+                      Perform detailed analysis:
+                      1. **Severity Assessment**: Rate the anomaly severity (LOW/MEDIUM/HIGH/CRITICAL)
+                      2. **Pattern Classification**: Identify anomaly type and characteristics
+                      3. **Impact Prediction**: Forecast potential market impact
+                      4. **Confidence Scoring**: Determine detection confidence level
+                      
+                      Generate immediate alert with analysis results.
+                    dependencies: []
+
+                  - task_id: "trigger_alert_system"
+                    type: "task"
+                    agent_personality: "neuromorphic_analyst"
+                    prompt: |
+                      Trigger appropriate alert systems based on anomaly analysis.
+                      
+                      Anomaly analysis:
+                      {{ tasks.analyze_anomaly.result }}
+                      
+                      Based on severity level:
+                      1. **CRITICAL**: Immediate notification to trading desk and risk management
+                      2. **HIGH**: Alert senior analysts and automated circuit breakers
+                      3. **MEDIUM**: Log for investigation and notify supervisors
+                      4. **LOW**: Record for pattern analysis and trend monitoring
+                      
+                      Execute appropriate alert protocols and continue monitoring.
+                    dependencies: ["analyze_anomaly"]
+
+              - condition: "true"
+                tasks:
+                  - task_id: "continue_monitoring"
+                    type: "task"
+                    agent_personality: "neuromorphic_analyst"
+                    prompt: |
+                      No anomalies detected. Continue normal monitoring operations.
+                      
+                      Maintain vigilance and periodically:
+                      1. **Status Check**: Verify SNN health and performance
+                      2. **Baseline Update**: Adapt to normal market evolution
+                      3. **Sensitivity Tuning**: Optimize detection parameters
+                      4. **Performance Metrics**: Track monitoring effectiveness
+                      
+                      This task will loop back to continue monitoring.
+                    dependencies: [] 

@@ -1,6 +1,78 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+namespace: q-platform
+
 resources:
-  - default-deployment.yaml
-  - devops-deployment.yaml
-  - reflector-deployment.yaml 
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+- rbac.yaml
+- network-policy.yaml
+- pod-disruption-budget.yaml
+- hpa.yaml
+
+commonLabels:
+  app.kubernetes.io/name: agentq
+  app.kubernetes.io/component: service
+  app.kubernetes.io/part-of: q-platform
+  app.kubernetes.io/managed-by: kustomize
+
+commonAnnotations:
+  q-platform.io/version: "1.0.0"
+  q-platform.io/service-type: "agent"
+
+images:
+- name: your-registry/agentq
+  newTag: latest
+
+configMapGenerator:
+- name: agentq-env
+  literals:
+  - DEPLOYMENT_ENV=production
+  - CLUSTER_NAME=q-platform
+  - ENVIRONMENT_TYPE=production
+
+secretGenerator:
+- name: agentq-secrets
+  literals:
+  - PLACEHOLDER_SECRET=placeholder
+  type: Opaque
+
+patches:
+- target:
+    kind: Deployment
+    name: agentq-default
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/image
+      value: your-registry/agentq:latest
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: DEPLOYMENT_ID
+        value: agentq-default
+- target:
+    kind: Deployment
+    name: agentq-devops
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/image
+      value: your-registry/agentq:latest
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: DEPLOYMENT_ID
+        value: agentq-devops
+- target:
+    kind: Deployment
+    name: agentq-data-analyst
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/image
+      value: your-registry/agentq:latest
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: DEPLOYMENT_ID
+        value: agentq-data-analyst 

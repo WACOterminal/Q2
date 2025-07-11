@@ -1,0 +1,112 @@
+{{- if .Values.services.managerQ.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "q-platform.fullname" . }}-manager-q-config
+  labels:
+    {{- include "q-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager-q
+data:
+  # Application Configuration
+  SERVICE_NAME: "manager-q"
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
+  LOG_LEVEL: {{ .Values.services.managerQ.logLevel | default "INFO" | quote }}
+  METRICS_PORT: "9091"
+  
+  # Network Configuration
+  HOST: "0.0.0.0"
+  PORT: "8003"
+  
+  # Pulsar Configuration
+  {{- if .Values.infrastructure.pulsar.enabled }}
+  PULSAR_SERVICE_URL: "pulsar://{{ include "q-platform.fullname" . }}-pulsar-broker:6650"
+  PULSAR_ADMIN_URL: "http://{{ include "q-platform.fullname" . }}-pulsar-broker:8080"
+  {{- else }}
+  PULSAR_SERVICE_URL: {{ .Values.services.managerQ.config.pulsarServiceUrl | default "pulsar://pulsar-broker:6650" | quote }}
+  PULSAR_ADMIN_URL: {{ .Values.services.managerQ.config.pulsarAdminUrl | default "http://pulsar-admin:8080" | quote }}
+  {{- end }}
+  
+  # Health Check Configuration
+  HEALTH_CHECK_PATH: "/health"
+  HEALTH_CHECK_PORT: "8003"
+  
+  # Workflow Configuration
+  MAX_CONCURRENT_WORKFLOWS: {{ .Values.services.managerQ.config.maxConcurrentWorkflows | default 100 | quote }}
+  MAX_CONCURRENT_TASKS: {{ .Values.services.managerQ.config.maxConcurrentTasks | default 500 | quote }}
+  WORKFLOW_TIMEOUT_HOURS: {{ .Values.services.managerQ.config.workflowTimeoutHours | default 24 | quote }}
+  
+  # Resource Management
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: {{ .Values.services.managerQ.config.circuitBreakerFailureThreshold | default 5 | quote }}
+  CIRCUIT_BREAKER_RECOVERY_TIMEOUT: {{ .Values.services.managerQ.config.circuitBreakerRecoveryTimeout | default 60 | quote }}
+  
+  # Observability
+  ENABLE_TRACING: {{ .Values.global.tracing.enabled | default true | quote }}
+  ENABLE_METRICS: {{ .Values.global.metrics.enabled | default true | quote }}
+  ENABLE_PROMETHEUS: {{ .Values.global.metrics.enabled | default true | quote }}
+  {{- if .Values.global.tracing.enabled }}
+  JAEGER_AGENT_HOST: {{ .Values.global.tracing.jaeger.endpoint | default "jaeger-agent.observability.svc.cluster.local" | quote }}
+  {{- end }}
+  
+  # Database Configuration
+  {{- if .Values.infrastructure.ignite.enabled }}
+  IGNITE_ENABLED: "true"
+  IGNITE_HOST: {{ include "q-platform.fullname" . }}-ignite
+  IGNITE_PORT: "10800"
+  {{- else }}
+  IGNITE_ENABLED: {{ .Values.services.managerQ.config.igniteEnabled | default true | quote }}
+  IGNITE_HOST: {{ .Values.services.managerQ.config.igniteHost | default "ignite-cluster" | quote }}
+  IGNITE_PORT: {{ .Values.services.managerQ.config.ignitePort | default "10800" | quote }}
+  {{- end }}
+  
+  # Vector Store Configuration
+  {{- if .Values.services.vectorStoreQ.enabled }}
+  VECTORSTORE_URL: "http://{{ include "q-platform.fullname" . }}-vector-store-q:{{ .Values.services.vectorStoreQ.service.port }}"
+  {{- else }}
+  VECTORSTORE_URL: {{ .Values.services.managerQ.config.vectorStoreUrl | default "http://vectorstore-q:8001" | quote }}
+  {{- end }}
+  
+  # Knowledge Graph Configuration
+  {{- if .Values.services.knowledgeGraphQ.enabled }}
+  KNOWLEDGEGRAPH_URL: "http://{{ include "q-platform.fullname" . }}-knowledge-graph-q:{{ .Values.services.knowledgeGraphQ.service.port }}"
+  {{- else }}
+  KNOWLEDGEGRAPH_URL: {{ .Values.services.managerQ.config.knowledgeGraphUrl | default "http://knowledgegraphq:8000" | quote }}
+  {{- end }}
+  
+  # Quantum Pulse Configuration
+  {{- if .Values.services.quantumPulse.enabled }}
+  QUANTUMPULSE_URL: "http://{{ include "q-platform.fullname" . }}-quantum-pulse-api:{{ .Values.services.quantumPulse.api.service.port }}"
+  {{- else }}
+  QUANTUMPULSE_URL: {{ .Values.services.managerQ.config.quantumPulseUrl | default "http://quantumpulse-api:8000" | quote }}
+  {{- end }}
+  
+  # Environment
+  ENVIRONMENT: {{ .Values.global.environment | default "production" | quote }}
+  
+  # Retry Configuration
+  MAX_RETRIES: {{ .Values.services.managerQ.config.maxRetries | default 3 | quote }}
+  RETRY_DELAY: {{ .Values.services.managerQ.config.retryDelay | default "1.0" | quote }}
+  
+  # Security Configuration
+  ENABLE_CORS: {{ .Values.services.managerQ.config.enableCors | default true | quote }}
+  ALLOWED_ORIGINS: {{ .Values.services.managerQ.config.allowedOrigins | default "*" | quote }}
+  
+  # Performance Configuration
+  WORKER_THREADS: {{ .Values.services.managerQ.config.workerThreads | default 4 | quote }}
+  REQUEST_TIMEOUT: {{ .Values.services.managerQ.config.requestTimeout | default 30 | quote }}
+  
+  # Logging Configuration
+  LOG_FORMAT: {{ .Values.services.managerQ.config.logFormat | default "json" | quote }}
+  LOG_TO_PULSAR: {{ .Values.services.managerQ.config.logToPulsar | default true | quote }}
+  LOG_PULSAR_TOPIC: {{ .Values.services.managerQ.config.logPulsarTopic | default "persistent://public/default/manager-q-logs" | quote }}
+  
+  # Kubernetes Configuration
+  KUBERNETES_NAMESPACE: {{ .Release.Namespace | quote }}
+  KUBERNETES_SERVICE_ACCOUNT: {{ include "q-platform.fullname" . }}-manager-q
+  
+  # Domain Configuration
+  DOMAIN: {{ .Values.global.domain | default "q-platform.local" | quote }}
+  
+  {{- if .Values.services.managerQ.config.extraConfig }}
+  {{- include "q-platform.tplvalues.render" (dict "value" .Values.services.managerQ.config.extraConfig "context" $) | nindent 2 }}
+  {{- end }}
+{{- end }} 

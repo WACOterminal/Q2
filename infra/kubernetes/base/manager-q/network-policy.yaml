@@ -1,0 +1,224 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: manager-q-network-policy
+  labels:
+    app: manager-q
+    component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: manager-q
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from Istio sidecar
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15090  # Istio sidecar metrics
+  # Allow ingress from within the same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    ports:
+    - protocol: TCP
+      port: 8003  # Application port
+    - protocol: TCP
+      port: 9091  # Metrics port
+  # Allow ingress from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9091  # Metrics port
+  # Allow ingress from ingress controllers
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8003
+  egress:
+  # Allow egress to DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow egress to Pulsar
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: pulsar-broker
+    ports:
+    - protocol: TCP
+      port: 6650  # Pulsar service port
+    - protocol: TCP
+      port: 8080  # Pulsar admin port
+  # Allow egress to other Q platform services
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: vectorstore-q
+    ports:
+    - protocol: TCP
+      port: 8001
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: knowledgegraphq
+    ports:
+    - protocol: TCP
+      port: 8000
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: quantumpulse-api
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow egress to Ignite cluster
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: ignite-cluster
+    ports:
+    - protocol: TCP
+      port: 10800  # Ignite thin client port
+    - protocol: TCP
+      port: 47500  # Ignite discovery port
+  # Allow egress to Vault
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: vault
+    - podSelector:
+        matchLabels:
+          app: vault
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow egress to Keycloak
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: keycloak
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow egress to Kubernetes API server
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  # Allow egress for health checks and monitoring
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow egress to Jaeger for tracing
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: observability
+    - podSelector:
+        matchLabels:
+          app: jaeger
+    ports:
+    - protocol: TCP
+      port: 14268  # Jaeger collector
+    - protocol: UDP
+      port: 6831   # Jaeger agent
+---
+# Additional network policy for inter-service communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: manager-q-allow-agentq
+  labels:
+    app: manager-q
+    component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: manager-q
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from agentQ instances
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: agentq-default
+    ports:
+    - protocol: TCP
+      port: 8003
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: agentq-devops
+    ports:
+    - protocol: TCP
+      port: 8003
+  egress:
+  # Allow egress to agentQ instances
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: agentq-default
+    ports:
+    - protocol: TCP
+      port: 8000
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    - podSelector:
+        matchLabels:
+          app: agentq-devops
+    ports:
+    - protocol: TCP
+      port: 8000 

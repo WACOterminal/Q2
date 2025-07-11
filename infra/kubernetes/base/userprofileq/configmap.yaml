@@ -1,0 +1,218 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: userprofileq-config
+  labels:
+    app: userprofileq
+    component: config
+data:
+  # Application Configuration
+  SERVICE_NAME: "userprofileq"
+  SERVICE_VERSION: "1.0.0"
+  LOG_LEVEL: "INFO"
+  METRICS_PORT: "9091"
+  
+  # Network Configuration
+  HOST: "0.0.0.0"
+  PORT: "8005"
+  API_PORT: "8006"
+  ADMIN_PORT: "8009"
+  
+  # User Management Configuration
+  USER_REGISTRATION_ENABLED: "true"
+  EMAIL_VERIFICATION_REQUIRED: "true"
+  PASSWORD_COMPLEXITY_ENABLED: "true"
+  PASSWORD_MIN_LENGTH: "8"
+  PASSWORD_EXPIRY_DAYS: "90"
+  ACCOUNT_LOCKOUT_ENABLED: "true"
+  ACCOUNT_LOCKOUT_ATTEMPTS: "5"
+  ACCOUNT_LOCKOUT_DURATION: "900"
+  
+  # Authentication Configuration
+  JWT_ENABLED: "true"
+  JWT_EXPIRY: "3600"
+  REFRESH_TOKEN_ENABLED: "true"
+  REFRESH_TOKEN_EXPIRY: "604800"
+  SESSION_TIMEOUT: "1800"
+  CONCURRENT_SESSIONS_LIMIT: "3"
+  
+  # Authorization Configuration
+  RBAC_ENABLED: "true"
+  PERMISSION_CACHING: "true"
+  ROLE_INHERITANCE: "true"
+  DYNAMIC_PERMISSIONS: "true"
+  
+  # Profile Configuration
+  PROFILE_FIELDS: "name,email,phone,organization,department,role,preferences"
+  CUSTOM_FIELDS_ENABLED: "true"
+  PROFILE_PICTURE_ENABLED: "true"
+  PROFILE_PICTURE_MAX_SIZE: "5MB"
+  
+  # Pulsar Configuration
+  PULSAR_SERVICE_URL: "pulsar://pulsar-broker:6650"
+  PULSAR_ADMIN_URL: "http://pulsar-admin:8080"
+  USER_EVENTS_TOPIC: "persistent://public/default/q.userprofile.events"
+  AUTH_EVENTS_TOPIC: "persistent://public/default/q.userprofile.auth"
+  PROFILE_UPDATES_TOPIC: "persistent://public/default/q.userprofile.updates"
+  
+  # Health Check Configuration
+  HEALTH_CHECK_PATH: "/health"
+  HEALTH_CHECK_PORT: "8005"
+  
+  # Observability
+  ENABLE_TRACING: "true"
+  ENABLE_METRICS: "true"
+  ENABLE_PROMETHEUS: "true"
+  
+  # Database Configuration
+  DATABASE_TYPE: "postgresql"
+  DATABASE_HOST: "postgres"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "userprofile"
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_CONNECTIONS: "100"
+  
+  # Cache Configuration
+  CACHE_ENABLED: "true"
+  CACHE_TYPE: "redis"
+  CACHE_HOST: "redis"
+  CACHE_PORT: "6379"
+  CACHE_TTL: "3600"
+  CACHE_MAX_SIZE: "1GB"
+  
+  # Performance Configuration
+  WORKER_PROCESSES: "4"
+  WORKER_THREADS: "8"
+  REQUEST_QUEUE_SIZE: "1000"
+  RESPONSE_TIMEOUT: "300"
+  
+  # Security Configuration
+  ENCRYPTION_ENABLED: "true"
+  PII_ENCRYPTION: "true"
+  AUDIT_LOGGING: "true"
+  GDPR_COMPLIANCE: "true"
+  DATA_RETENTION_DAYS: "2555"  # 7 years
+  
+  # Email Configuration
+  EMAIL_ENABLED: "true"
+  EMAIL_VERIFICATION_ENABLED: "true"
+  PASSWORD_RESET_ENABLED: "true"
+  EMAIL_TEMPLATE_PATH: "/app/templates"
+  
+  # Integration Configuration
+  LDAP_ENABLED: "true"
+  ACTIVE_DIRECTORY_ENABLED: "true"
+  OAUTH2_ENABLED: "true"
+  SAML_ENABLED: "true"
+  
+  # OAuth2 Providers
+  GOOGLE_OAUTH_ENABLED: "true"
+  MICROSOFT_OAUTH_ENABLED: "true"
+  GITHUB_OAUTH_ENABLED: "true"
+  GITLAB_OAUTH_ENABLED: "true"
+  
+  # MFA Configuration
+  MFA_ENABLED: "true"
+  TOTP_ENABLED: "true"
+  SMS_MFA_ENABLED: "true"
+  EMAIL_MFA_ENABLED: "true"
+  BACKUP_CODES_ENABLED: "true"
+  
+  # API Configuration
+  API_RATE_LIMITING: "true"
+  API_RATE_LIMIT: "1000"
+  API_RATE_WINDOW: "60"
+  API_VERSIONING: "true"
+  
+  # Backup Configuration
+  BACKUP_ENABLED: "true"
+  BACKUP_INTERVAL: "3600"
+  BACKUP_RETENTION: "30"
+  BACKUP_STORAGE: "minio"
+  
+  # Monitoring Configuration
+  MONITORING_ENABLED: "true"
+  MONITORING_INTERVAL: "30"
+  ALERT_THRESHOLD_LATENCY: "1000"
+  ALERT_THRESHOLD_ERROR_RATE: "0.05"
+  
+  # Logging Configuration
+  LOG_FORMAT: "json"
+  LOG_TO_PULSAR: "true"
+  LOG_PULSAR_TOPIC: "persistent://public/default/userprofile-logs"
+  
+  # Environment
+  ENVIRONMENT: "production"
+  
+  # Notifications Configuration
+  NOTIFICATIONS_ENABLED: "true"
+  EMAIL_NOTIFICATIONS: "true"
+  SMS_NOTIFICATIONS: "true"
+  PUSH_NOTIFICATIONS: "true"
+  
+  # Privacy Configuration
+  PRIVACY_CONTROLS: "true"
+  DATA_EXPORT_ENABLED: "true"
+  DATA_DELETION_ENABLED: "true"
+  CONSENT_MANAGEMENT: "true"
+  
+  # User Preferences
+  THEME_PREFERENCES: "true"
+  LANGUAGE_PREFERENCES: "true"
+  TIMEZONE_PREFERENCES: "true"
+  NOTIFICATION_PREFERENCES: "true"
+  
+  # Integration with Q Platform Services
+  MANAGER_Q_URL: "http://manager-q:8003"
+  AGENT_Q_URL: "http://agentq-default:8000"
+  H2M_URL: "http://h2m:8008"
+  INTEGRATION_HUB_URL: "http://integrationhub:8006"
+  
+  # Session Management
+  SESSION_STORAGE: "redis"
+  SESSION_PREFIX: "userprofile:session:"
+  SESSION_CLEANUP_INTERVAL: "3600"
+  
+  # File Upload Configuration
+  PROFILE_UPLOAD_ENABLED: "true"
+  UPLOAD_MAX_SIZE: "10MB"
+  UPLOAD_ALLOWED_TYPES: "jpg,jpeg,png,gif,pdf,doc,docx"
+  UPLOAD_STORAGE: "minio"
+  
+  # User Analytics
+  ANALYTICS_ENABLED: "true"
+  LOGIN_TRACKING: "true"
+  ACTIVITY_TRACKING: "true"
+  USAGE_ANALYTICS: "true"
+  
+  # Compliance Configuration
+  HIPAA_COMPLIANCE: "true"
+  SOX_COMPLIANCE: "true"
+  PCI_COMPLIANCE: "true"
+  
+  # Feature Flags
+  FEATURE_FLAGS_ENABLED: "true"
+  BETA_FEATURES_ENABLED: "false"
+  EXPERIMENTAL_FEATURES_ENABLED: "false"
+  
+  # Localization
+  I18N_ENABLED: "true"
+  DEFAULT_LANGUAGE: "en"
+  SUPPORTED_LANGUAGES: "en,es,fr,de,zh,ja,ko,pt,ru,ar"
+  
+  # Administration
+  ADMIN_PANEL_ENABLED: "true"
+  BULK_OPERATIONS_ENABLED: "true"
+  USER_IMPORT_ENABLED: "true"
+  USER_EXPORT_ENABLED: "true"
+  
+  # Password Policy
+  PASSWORD_HISTORY_COUNT: "12"
+  PASSWORD_DICTIONARY_CHECK: "true"
+  PASSWORD_COMMON_PATTERNS_CHECK: "true"
+  
+  # Account Management
+  SELF_SERVICE_ENABLED: "true"
+  PROFILE_EDITING_ENABLED: "true"
+  PASSWORD_CHANGE_ENABLED: "true"
+  ACCOUNT_DELETION_ENABLED: "true" 

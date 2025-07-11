@@ -1,0 +1,38 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agentq-default-pdb
+  labels:
+    app: agentq-default
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agentq-default
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agentq-devops-pdb
+  labels:
+    app: agentq-devops
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agentq-devops
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agentq-data-analyst-pdb
+  labels:
+    app: agentq-data-analyst
+    component: availability
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: agentq-data-analyst 

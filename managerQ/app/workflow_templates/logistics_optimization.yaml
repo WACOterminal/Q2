@@ -27,4 +27,78 @@ tasks:
       Use the algorithm specified in the shared context: `{{ shared_context.swarm_algorithm }}`.
       
       The raw solution from the tool will be your final answer.
-    dependencies: ["define_logistics_problem"] 
+    dependencies: ["define_logistics_problem"]
+
+  - task_id: "validate_solution"
+    type: "task"
+    agent_personality: "logistics_agent"
+    prompt: |
+      Validate the optimized solution for feasibility and constraints compliance.
+      
+      Solution to validate:
+      {{ tasks.solve_with_swarm_intelligence.result }}
+      
+      Check:
+      1. **Route Feasibility**: Ensure all routes respect drone battery constraints
+      2. **Payload Limits**: Verify package weights don't exceed drone capacity
+      3. **Weather Constraints**: Confirm routes account for weather conditions
+      4. **Delivery Windows**: Check if time constraints are met
+      
+      Output a validation report with pass/fail status and any constraint violations.
+    dependencies: ["solve_with_swarm_intelligence"]
+
+  - task_id: "deploy_or_retry"
+    type: "conditional"
+    dependencies: ["validate_solution"]
+    branches:
+      - condition: "{{ 'PASS' in tasks.validate_solution.result|upper }}"
+        tasks:
+          - task_id: "deploy_routes"
+            type: "task"
+            agent_personality: "logistics_agent"
+            prompt: |
+              The optimized routes have passed validation. Deploy them to the drone fleet.
+              
+              Validated solution:
+              {{ tasks.solve_with_swarm_intelligence.result }}
+              
+              Use the appropriate drone fleet management tools to:
+              1. Upload route plans to each drone
+              2. Schedule departure times
+              3. Set up real-time monitoring
+              4. Configure fallback routes for emergencies
+              
+              Return deployment confirmation and monitoring dashboard links.
+            dependencies: []
+
+      - condition: "true"
+        tasks:
+          - task_id: "retry_optimization"
+            type: "task"
+            agent_personality: "logistics_agent"
+            prompt: |
+              Validation failed. Retry optimization with adjusted constraints.
+              
+              Validation issues:
+              {{ tasks.validate_solution.result }}
+              
+              Modify the problem definition to address constraint violations and re-run optimization:
+              1. Adjust battery life margins
+              2. Reduce payload if needed
+              3. Add weather buffer time
+              4. Implement backup route alternatives
+              
+              Use the `solve_problem_with_swarm` tool again with modified parameters.
+            dependencies: []
+
+          - task_id: "final_validation"
+            type: "task"
+            agent_personality: "logistics_agent"
+            prompt: |
+              Validate the retry solution for deployment readiness.
+              
+              Retry solution:
+              {{ tasks.retry_optimization.result }}
+              
+              Perform final validation checks and either deploy or escalate to human oversight.
+            dependencies: ["retry_optimization"] 

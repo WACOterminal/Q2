@@ -27,4 +27,66 @@ tasks:
       The prompt for the new goal should be:
       "The workflow template identified in the attached data is failing frequently. Please analyze the workflow template, identify a potential cause for the failures, and propose a fix by opening a pull request."
     dependencies:
-      - "find_inefficient_workflow" 
+      - "find_inefficient_workflow"
+
+  - task_id: "monitor_improvement_progress"
+    type: "task"
+    agent_personality: "meta_analyzer"
+    prompt: |
+      Monitor the progress of the improvement task that was delegated.
+      Goal ID: {{ tasks.delegate_improvement_task.result.id }}
+      
+      Use the await_goal_completion tool to wait for the improvement task to complete.
+      Track the status and results of the improvement effort.
+    dependencies:
+      - "delegate_improvement_task"
+
+  - task_id: "validate_improvement"
+    type: "conditional"
+    dependencies: ["monitor_improvement_progress"]
+    branches:
+      - condition: "{{ 'completed' in tasks.monitor_improvement_progress.result|lower }}"
+        tasks:
+          - task_id: "run_validation_tests"
+            type: "task"
+            agent_personality: "meta_analyzer"
+            prompt: |
+              The improvement task has been completed. Now validate the effectiveness of the fix.
+              
+              Re-run the original inefficient workflow query to check if the failure rate has improved:
+              {{ tasks.find_inefficient_workflow.result.workflow_id }}
+              
+              Compare the new failure rate with the baseline to determine improvement effectiveness.
+            dependencies: []
+
+          - task_id: "generate_improvement_report"
+            type: "task"
+            agent_personality: "meta_analyzer"
+            prompt: |
+              Generate a comprehensive improvement report.
+              
+              Include:
+              1. **Original Problem**: {{ tasks.find_inefficient_workflow.result }}
+              2. **Improvement Implementation**: {{ tasks.monitor_improvement_progress.result }}
+              3. **Validation Results**: {{ tasks.run_validation_tests.result }}
+              4. **Success Metrics**: Before/after comparison of failure rates
+              5. **Lessons Learned**: Key insights for future improvements
+              
+              Format as a structured markdown report for knowledge base storage.
+            dependencies: ["run_validation_tests"]
+
+      - condition: "true"
+        tasks:
+          - task_id: "escalate_failed_improvement"
+            type: "task"
+            agent_personality: "meta_analyzer"
+            prompt: |
+              The improvement task failed to complete successfully.
+              
+              Escalate this issue by creating a high-priority ticket with:
+              1. **Original Problem**: {{ tasks.find_inefficient_workflow.result }}
+              2. **Failed Improvement Details**: {{ tasks.monitor_improvement_progress.result }}
+              3. **Recommended Next Steps**: Manual investigation or alternative approaches
+              
+              Use the openproject_create_ticket tool to create the escalation ticket.
+            dependencies: [] 

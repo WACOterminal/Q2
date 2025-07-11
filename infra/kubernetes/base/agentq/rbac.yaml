@@ -1,0 +1,220 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentq
+  labels:
+    app: agentq
+    component: rbac
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentq-devops
+  labels:
+    app: agentq-devops
+    component: rbac
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentq-data-analyst
+  labels:
+    app: agentq-data-analyst
+    component: rbac
+automountServiceAccountToken: true
+---
+# Basic AgentQ Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agentq-basic
+  labels:
+    app: agentq
+    component: rbac
+rules:
+# Basic pod and service discovery
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch", "create"]
+# Metrics access
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+# Basic secrets access (read-only)
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+  resourceNames: ["agentq-secrets"]
+---
+# DevOps AgentQ Role (Extended Permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agentq-devops
+  labels:
+    app: agentq-devops
+    component: rbac
+rules:
+# Full access to pods and services
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets", "events", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods/log", "pods/exec"]
+  verbs: ["get", "list", "create"]
+# Apps and deployments management
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments/scale"]
+  verbs: ["get", "patch", "update"]
+# Batch jobs management
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Networking
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# HPA management
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Metrics access
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+# Custom resources
+- apiGroups: ["q-platform.io"]
+  resources: ["workflows", "workflowtemplates"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# Data Analyst AgentQ Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agentq-data-analyst
+  labels:
+    app: agentq-data-analyst
+    component: rbac
+rules:
+# Read access to most resources
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+  resourceNames: ["agentq-secrets", "database-credentials"]
+# Job management for data processing
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Metrics access
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+# Storage access for data processing
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create"]
+---
+# ClusterRole for cross-namespace operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agentq-cluster
+  labels:
+    app: agentq
+    component: rbac
+rules:
+# Node information
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+# Cluster metrics
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list"]
+# Custom resources across cluster
+- apiGroups: ["q-platform.io"]
+  resources: ["workflows", "workflowtemplates"]
+  verbs: ["get", "list", "watch"]
+---
+# Role bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentq-basic
+  labels:
+    app: agentq
+    component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: agentq-basic
+subjects:
+- kind: ServiceAccount
+  name: agentq
+  namespace: q-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentq-devops
+  labels:
+    app: agentq-devops
+    component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: agentq-devops
+subjects:
+- kind: ServiceAccount
+  name: agentq-devops
+  namespace: q-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentq-data-analyst
+  labels:
+    app: agentq-data-analyst
+    component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: agentq-data-analyst
+subjects:
+- kind: ServiceAccount
+  name: agentq-data-analyst
+  namespace: q-platform
+---
+# Cluster role bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agentq-cluster
+  labels:
+    app: agentq
+    component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agentq-cluster
+subjects:
+- kind: ServiceAccount
+  name: agentq
+  namespace: q-platform
+- kind: ServiceAccount
+  name: agentq-devops
+  namespace: q-platform
+- kind: ServiceAccount
+  name: agentq-data-analyst
+  namespace: q-platform 

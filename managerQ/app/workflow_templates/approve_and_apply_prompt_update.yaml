@@ -21,14 +21,137 @@ tasks:
     dependencies: []
     required_roles: ["lead_architect", "system_admin"]
 
-  # In a real system, a subsequent task would run only upon approval.
-  # This task would be responsible for reading the agent's Python file,
-  # replacing the system prompt constant, and potentially triggering a
-  # rolling restart of the agent service to apply the change.
-  #
-  # - task_id: "apply_prompt_change"
-  #   type: "task"
-  #   agent_personality: "devops"
-  #   prompt: "Apply the approved prompt change for '{{ shared_context.target_personality }}'."
-  #   dependencies: ["human_approval_for_prompt_update"]
-  #   condition: "{{ tasks.human_approval_for_prompt_update.result == 'approved' }}" 
+  - task_id: "apply_prompt_change"
+    type: "conditional"
+    dependencies: ["human_approval_for_prompt_update"]
+    branches:
+      - condition: "{{ tasks.human_approval_for_prompt_update.result == 'approved' }}"
+        tasks:
+          - task_id: "locate_agent_config"
+            type: "task"
+            agent_personality: "devops"
+            prompt: |
+              Locate the configuration file or Python module for the '{{ shared_context.target_personality }}' agent.
+              Search for files containing system prompts or agent configurations.
+              Return the file path where the prompt needs to be updated.
+            dependencies: []
+
+          - task_id: "backup_original_prompt"
+            type: "task"
+            agent_personality: "devops"
+            prompt: |
+              Create a backup of the original prompt before making changes.
+              File: {{ tasks.locate_agent_config.result }}
+              Save the current prompt content to a backup file with timestamp.
+            dependencies: ["locate_agent_config"]
+
+          - task_id: "update_agent_prompt"
+            type: "task"
+            agent_personality: "devops"
+            prompt: |
+              Update the agent's system prompt with the approved change.
+              File: {{ tasks.locate_agent_config.result }}
+              Agent: {{ shared_context.target_personality }}
+              New prompt enhancement: {{ shared_context.suggestion }}
+              
+              Apply the suggested change to the system prompt while maintaining the overall structure.
+            dependencies: ["backup_original_prompt"]
+
+          - task_id: "validate_prompt_syntax"
+            type: "task"
+            agent_personality: "devops"
+            prompt: |
+              Validate the updated prompt for syntax errors and proper formatting.
+              File: {{ tasks.locate_agent_config.result }}
+              Ensure the prompt is valid and follows the expected format.
+            dependencies: ["update_agent_prompt"]
+
+          - task_id: "create_deployment_branch"
+            type: "task"
+            agent_personality: "devops"
+            prompt: |
+              Create a new branch for deploying the prompt change.
+              Branch name: 'prompt-update/{{ shared_context.target_personality }}-{{ workflow.workflow_id }}'
+              Commit the prompt changes with a descriptive message.
+            dependencies: ["validate_prompt_syntax"]
+
+          - task_id: "test_agent_functionality"
+            type: "task"
+            agent_personality: "devops"
+            prompt: |
+              Run basic functionality tests for the '{{ shared_context.target_personality }}' agent.
+              Execute unit tests or integration tests to ensure the prompt change doesn't break functionality.
+            dependencies: ["create_deployment_branch"]
+
+          - task_id: "deploy_prompt_change"
+            type: "conditional"
+            dependencies: ["test_agent_functionality"]
+            branches:
+              - condition: "{{ 'success' in tasks.test_agent_functionality.result|lower }}"
+                tasks:
+                  - task_id: "rolling_restart_service"
+                    type: "task"
+                    agent_personality: "devops"
+                    prompt: |
+                      Perform a rolling restart of the '{{ shared_context.target_personality }}' agent service.
+                      This will apply the new prompt without downtime.
+                      Monitor the service health during the restart.
+                    dependencies: []
+
+                  - task_id: "verify_deployment"
+                    type: "task"
+                    agent_personality: "devops"
+                    prompt: |
+                      Verify that the prompt change has been successfully applied.
+                      Check that the '{{ shared_context.target_personality }}' agent is using the new prompt.
+                      Confirm service is healthy and responding correctly.
+                    dependencies: ["rolling_restart_service"]
+
+                  - task_id: "create_change_log"
+                    type: "task"
+                    agent_personality: "default"
+                    prompt: |
+                      Create a change log entry for the prompt update.
+                      Agent: {{ shared_context.target_personality }}
+                      Requester: {{ shared_context.requester_agent }}
+                      Change: {{ shared_context.suggestion }}
+                      Timestamp: {{ workflow.started_at }}
+                      Status: Successfully applied
+                    dependencies: ["verify_deployment"]
+
+              - condition: "true"
+                tasks:
+                  - task_id: "rollback_change"
+                    type: "task"
+                    agent_personality: "devops"
+                    prompt: |
+                      Tests failed. Rolling back the prompt change.
+                      Restore the original prompt from backup: {{ tasks.backup_original_prompt.result }}
+                      Ensure the agent returns to its previous working state.
+                    dependencies: []
+
+                  - task_id: "notify_failure"
+                    type: "task"
+                    agent_personality: "default"
+                    prompt: |
+                      Notify stakeholders that the prompt update failed.
+                      Agent: {{ shared_context.target_personality }}
+                      Requester: {{ shared_context.requester_agent }}
+                      Reason: {{ tasks.test_agent_functionality.result }}
+                      The change has been rolled back.
+                    dependencies: ["rollback_change"]
+
+      - condition: "true"
+        tasks:
+          - task_id: "approval_rejected"
+            type: "task"
+            agent_personality: "default"
+            prompt: |
+              The prompt update was not approved.
+              Agent: {{ shared_context.target_personality }}
+              Requester: {{ shared_context.requester_agent }}
+              Suggested change: {{ shared_context.suggestion }}
+              Status: {{ tasks.human_approval_for_prompt_update.result }}
+              
+              No changes will be made to the agent's prompt.
+            dependencies: [] 

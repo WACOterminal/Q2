@@ -3,15 +3,16 @@ import threading
 from typing import Optional, List, Set, Tuple
 import jinja2
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import time # Added for workflow duration metric
+import asyncio
+import pulsar
+from collections import defaultdict
 
 from managerQ.app.core.workflow_manager import workflow_manager
 from managerQ.app.core.task_dispatcher import task_dispatcher
 from managerQ.app.models import TaskStatus, WorkflowStatus, Workflow, TaskBlock, WorkflowTask, ConditionalBlock, ApprovalBlock, LoopBlock, WorkflowEvent, EthicalReviewStatus
 from managerQ.app.api.dashboard_ws import broadcast_workflow_event
-import asyncio
-import pulsar
 from managerQ.app.config import settings
 from shared.pulsar_tracing import inject_trace_context, extract_trace_context
 from opentelemetry import trace
@@ -26,7 +27,7 @@ tracer = trace.get_tracer(__name__)
 class WorkflowExecutor:
     """
     An event-driven process that listens for task status changes and advances
-    workflows accordingly.
+    workflows accordingly. Enhanced with robust error handling and recovery mechanisms.
     """
 
     def __init__(self):
@@ -38,6 +39,19 @@ class WorkflowExecutor:
         self._status_consumer: Optional[pulsar.Consumer] = None
         self._jinja_env = jinja2.Environment()
         self.task_dispatcher = task_dispatcher
+        
+        # Enhanced robustness features
+        self._workflow_timeouts = {}  # Track workflow execution timeouts
+        self._circuit_breaker_state = defaultdict(dict)  # Track circuit breaker states
+        self._resource_limits = {
+            "max_concurrent_workflows": 100,
+            "max_concurrent_tasks": 500,
+            "max_workflow_duration_hours": 24,
+            "max_retry_attempts": 3
+        }
+        self._active_workflows = set()  # Track active workflows for resource management
+        self._deadlock_detection_interval = 300  # 5 minutes
+        self._last_deadlock_check = time.time()
 
     def start(self):
         """Starts the executor in a background thread to listen for events."""
@@ -95,10 +109,17 @@ class WorkflowExecutor:
         """
         Starts the execution of a new workflow.
         This is the primary entry point for kicking off a workflow.
+        Enhanced with resource limits and robustness checks.
         """
         with tracer.start_as_current_span("execute_workflow", attributes={"workflow_id": workflow_id, "user_id": user_id}) as span:
             logger.info(f"Starting execution for workflow '{workflow_id}' for user '{user_id}'.")
             
+            # Check resource limits before starting
+            if not self._check_resource_limits():
+                logger.error(f"Resource limits exceeded. Cannot start workflow '{workflow_id}'.")
+                span.set_status(trace.Status(trace.StatusCode.ERROR, "Resource limits exceeded"))
+                return
+
             workflow = workflow_manager.get_workflow(workflow_id, user_id)
             if not workflow:
                 logger.error(f"Cannot execute workflow '{workflow_id}': Not found for user '{user_id}'.")
@@ -109,8 +130,21 @@ class WorkflowExecutor:
                 logger.warning(f"Workflow '{workflow_id}' is already in status '{workflow.status.value}' and cannot be started again.")
                 return
 
+            # Check for circular dependencies before starting
+            if self._detect_circular_dependencies(workflow):
+                logger.error(f"Circular dependency detected in workflow '{workflow_id}'. Cannot start.")
+                workflow.status = WorkflowStatus.FAILED
+                workflow_manager.update_workflow(workflow)
+                span.set_status(trace.Status(trace.StatusCode.ERROR, "Circular dependency detected"))
+                return
+
             workflow.status = WorkflowStatus.RUNNING
             workflow_manager.update_workflow(workflow)
+            
+            # Track workflow for resource management and timeout
+            self._active_workflows.add(workflow_id)
+            timeout_time = datetime.now() + timedelta(hours=self._resource_limits["max_workflow_duration_hours"])
+            self._workflow_timeouts[workflow_id] = timeout_time
 
             # Broadcast the start event
             await broadcast_workflow_event(WorkflowEvent(
@@ -310,8 +344,24 @@ class WorkflowExecutor:
     async def process_workflow(self, workflow: Workflow):
         """
         Processes a single workflow's execution state, dispatching any new tasks that are ready.
+        Enhanced with timeout checking and deadlock detection.
         """
         logger.info(f"Processing workflow '{workflow.workflow_id}'...")
+        
+        # Check for workflow timeout
+        if self._check_workflow_timeout(workflow.workflow_id):
+            logger.warning(f"Workflow '{workflow.workflow_id}' has exceeded maximum execution time. Marking as failed.")
+            workflow.status = WorkflowStatus.FAILED
+            workflow.final_result = "Workflow exceeded maximum execution time limit"
+            workflow_manager.update_workflow(workflow)
+            self._cleanup_workflow(workflow.workflow_id)
+            return
+
+        # Periodic deadlock detection
+        if time.time() - self._last_deadlock_check > self._deadlock_detection_interval:
+            await self._check_for_deadlocks()
+            self._last_deadlock_check = time.time()
+
         await self._process_blocks(workflow.tasks, workflow)
 
         all_blocks_after = workflow.get_all_tasks_recursive()
@@ -336,6 +386,9 @@ class WorkflowExecutor:
             workflow.status = final_status
             workflow_manager.update_workflow(workflow)
             logger.info(f"Workflow '{workflow.workflow_id}' has finished with status '{final_status.value}'.")
+            
+            # Cleanup workflow resources
+            self._cleanup_workflow(workflow.workflow_id)
             
             # Broadcast to the old dashboard and the new observability dashboard
             await broadcast_workflow_event(WorkflowEvent(
@@ -723,6 +776,212 @@ class WorkflowExecutor:
         # We don't mark as complete here anymore. The worker will do that.
         # We can, however, mark it as "evaluating" if we add such a status.
         # For now, we'll leave it as PENDING until the worker picks it up.
+
+    def _check_resource_limits(self) -> bool:
+        """
+        Checks if the system has sufficient resources to start a new workflow.
+        Returns True if resources are available, False otherwise.
+        """
+        active_workflow_count = len(self._active_workflows)
+        
+        if active_workflow_count >= self._resource_limits["max_concurrent_workflows"]:
+            logger.warning(f"Maximum concurrent workflows ({self._resource_limits['max_concurrent_workflows']}) exceeded. Active: {active_workflow_count}")
+            return False
+        
+        # Check active task count across all workflows
+        active_task_count = 0
+        for workflow_id in self._active_workflows:
+            workflow = workflow_manager.get_workflow(workflow_id)
+            if workflow:
+                active_task_count += len([t for t in workflow.get_all_tasks_recursive() 
+                                        if t.status in [TaskStatus.PENDING, TaskStatus.DISPATCHED, TaskStatus.RUNNING]])
+        
+        if active_task_count >= self._resource_limits["max_concurrent_tasks"]:
+            logger.warning(f"Maximum concurrent tasks ({self._resource_limits['max_concurrent_tasks']}) exceeded. Active: {active_task_count}")
+            return False
+        
+        return True
+
+    def _detect_circular_dependencies(self, workflow: Workflow) -> bool:
+        """
+        Detects circular dependencies in workflow tasks using DFS.
+        Returns True if circular dependencies are found, False otherwise.
+        """
+        try:
+            all_tasks = workflow.get_all_tasks_recursive()
+            task_map = {task.task_id: task for task in all_tasks}
+            
+            # Build adjacency list
+            graph = defaultdict(list)
+            for task in all_tasks:
+                for dep in task.dependencies:
+                    if dep in task_map:
+                        graph[dep].append(task.task_id)
+            
+            # DFS to detect cycles
+            visited = set()
+            rec_stack = set()
+            
+            def has_cycle(node):
+                if node in rec_stack:
+                    return True
+                if node in visited:
+                    return False
+                
+                visited.add(node)
+                rec_stack.add(node)
+                
+                for neighbor in graph[node]:
+                    if has_cycle(neighbor):
+                        return True
+                
+                rec_stack.remove(node)
+                return False
+            
+            # Check all nodes
+            for task_id in task_map:
+                if task_id not in visited:
+                    if has_cycle(task_id):
+                        logger.error(f"Circular dependency detected involving task: {task_id}")
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error detecting circular dependencies: {e}", exc_info=True)
+            return True  # Fail safe - assume circular dependency if we can't check
+
+    def _check_workflow_timeout(self, workflow_id: str) -> bool:
+        """
+        Checks if a workflow has exceeded its maximum execution time.
+        Returns True if the workflow has timed out, False otherwise.
+        """
+        timeout_time = self._workflow_timeouts.get(workflow_id)
+        if timeout_time and datetime.now() > timeout_time:
+            logger.warning(f"Workflow {workflow_id} has exceeded maximum execution time")
+            return True
+        return False
+
+    def _cleanup_workflow(self, workflow_id: str):
+        """
+        Cleans up workflow resources and tracking data.
+        """
+        self._active_workflows.discard(workflow_id)
+        self._workflow_timeouts.pop(workflow_id, None)
+        # Clean up circuit breaker state for this workflow
+        if workflow_id in self._circuit_breaker_state:
+            del self._circuit_breaker_state[workflow_id]
+
+    async def _check_for_deadlocks(self):
+        """
+        Performs deadlock detection across all active workflows.
+        Looks for workflows that have been stuck without progress for too long.
+        """
+        logger.debug("Performing deadlock detection check")
+        
+        stuck_threshold = timedelta(minutes=30)  # Consider workflow stuck if no progress for 30 minutes
+        current_time = datetime.now()
+        
+        for workflow_id in list(self._active_workflows):
+            workflow = workflow_manager.get_workflow(workflow_id)
+            if not workflow:
+                continue
+                
+            # Check if workflow has made progress recently
+            last_activity = workflow.created_at
+            for task in workflow.get_all_tasks_recursive():
+                if hasattr(task, 'updated_at') and task.updated_at:
+                    last_activity = max(last_activity, task.updated_at)
+            
+            if current_time - last_activity > stuck_threshold:
+                # Check if workflow is actually stuck (has pending tasks but no running tasks)
+                all_tasks = workflow.get_all_tasks_recursive()
+                pending_tasks = [t for t in all_tasks if t.status == TaskStatus.PENDING]
+                running_tasks = [t for t in all_tasks if t.status in [TaskStatus.DISPATCHED, TaskStatus.RUNNING]]
+                
+                if pending_tasks and not running_tasks:
+                    logger.warning(f"Potential deadlock detected in workflow {workflow_id}. "
+                                 f"Has {len(pending_tasks)} pending tasks but no running tasks.")
+                    
+                    # Try to resolve deadlock by checking if any pending tasks can be dispatched
+                    try:
+                        await self.process_workflow(workflow)
+                    except Exception as e:
+                        logger.error(f"Failed to resolve potential deadlock in workflow {workflow_id}: {e}")
+                        
+                        # If we can't resolve it, mark workflow as failed
+                        workflow.status = WorkflowStatus.FAILED
+                        workflow.final_result = "Workflow stuck in deadlock - terminated"
+                        workflow_manager.update_workflow(workflow)
+                        self._cleanup_workflow(workflow_id)
+
+    def _get_circuit_breaker_state(self, service_name: str) -> dict:
+        """
+        Gets the circuit breaker state for a service.
+        """
+        if service_name not in self._circuit_breaker_state:
+            self._circuit_breaker_state[service_name] = {
+                "state": "CLOSED",  # CLOSED, OPEN, HALF_OPEN
+                "failure_count": 0,
+                "last_failure_time": None,
+                "success_count": 0,
+                "recovery_timeout": 60  # seconds
+            }
+        return self._circuit_breaker_state[service_name]
+
+    def _update_circuit_breaker_on_failure(self, service_name: str):
+        """
+        Updates circuit breaker state when a service call fails.
+        """
+        cb_state = self._get_circuit_breaker_state(service_name)
+        cb_state["failure_count"] += 1
+        cb_state["last_failure_time"] = datetime.now()
+        
+        # Open circuit breaker if failure threshold is reached
+        if cb_state["failure_count"] >= 5:  # Threshold of 5 failures
+            cb_state["state"] = "OPEN"
+            logger.warning(f"Circuit breaker opened for service {service_name}")
+
+    def _update_circuit_breaker_on_success(self, service_name: str):
+        """
+        Updates circuit breaker state when a service call succeeds.
+        """
+        cb_state = self._get_circuit_breaker_state(service_name)
+        
+        if cb_state["state"] == "HALF_OPEN":
+            cb_state["success_count"] += 1
+            # Close circuit breaker if we get enough consecutive successes
+            if cb_state["success_count"] >= 3:
+                cb_state["state"] = "CLOSED"
+                cb_state["failure_count"] = 0
+                cb_state["success_count"] = 0
+                logger.info(f"Circuit breaker closed for service {service_name}")
+        elif cb_state["state"] == "CLOSED":
+            # Reset failure count on success
+            cb_state["failure_count"] = 0
+
+    def _should_allow_request(self, service_name: str) -> bool:
+        """
+        Determines if a request should be allowed based on circuit breaker state.
+        """
+        cb_state = self._get_circuit_breaker_state(service_name)
+        
+        if cb_state["state"] == "CLOSED":
+            return True
+        elif cb_state["state"] == "OPEN":
+            # Check if we should transition to HALF_OPEN
+            if cb_state["last_failure_time"]:
+                time_since_failure = (datetime.now() - cb_state["last_failure_time"]).total_seconds()
+                if time_since_failure >= cb_state["recovery_timeout"]:
+                    cb_state["state"] = "HALF_OPEN"
+                    cb_state["success_count"] = 0
+                    logger.info(f"Circuit breaker transitioning to HALF_OPEN for service {service_name}")
+                    return True
+            return False
+        elif cb_state["state"] == "HALF_OPEN":
+            return True
+        
+        return False
 
 # Singleton instance
 workflow_executor = WorkflowExecutor() 

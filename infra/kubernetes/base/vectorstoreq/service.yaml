@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vectorstoreq
+  labels:
+    app: vectorstoreq
+    component: service
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8001
+    targetPort: 8001
+  - name: api
+    protocol: TCP
+    port: 8002
+    targetPort: 8002
+  - name: admin
+    protocol: TCP
+    port: 8003
+    targetPort: 8003
+  - name: metrics
+    protocol: TCP
+    port: 9091
+    targetPort: 9091
+  selector:
+    app: vectorstoreq
+---
+# Service for vector search API
+apiVersion: v1
+kind: Service
+metadata:
+  name: vectorstore-q
+  labels:
+    app: vectorstoreq
+    component: service
+    service-type: search
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8001
+    targetPort: 8001
+  selector:
+    app: vectorstoreq 

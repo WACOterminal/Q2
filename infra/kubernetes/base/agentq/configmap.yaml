@@ -1,0 +1,221 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentq-config
+  labels:
+    app: agentq
+    component: config
+data:
+  # Application Configuration
+  SERVICE_NAME: "agentq"
+  SERVICE_VERSION: "1.0.0"
+  LOG_LEVEL: "INFO"
+  METRICS_PORT: "9091"
+  
+  # Network Configuration
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  
+  # Agent Configuration
+  AGENT_PERSONALITY: "default"
+  MAX_MEMORY_SIZE: "1000"
+  TOOL_TIMEOUT: "30"
+  MAX_RETRIES: "3"
+  RETRY_DELAY: "1.0"
+  
+  # ReAct Loop Configuration
+  MAX_ITERATIONS: "10"
+  THOUGHT_TIMEOUT: "30"
+  ACTION_TIMEOUT: "60"
+  OBSERVATION_TIMEOUT: "30"
+  
+  # Pulsar Configuration
+  PULSAR_SERVICE_URL: "pulsar://pulsar-broker:6650"
+  PULSAR_ADMIN_URL: "http://pulsar-admin:8080"
+  AGENT_REGISTRATION_TOPIC: "persistent://public/default/q.agentq.registrations"
+  AGENT_RESULTS_TOPIC: "persistent://public/default/q.agentq.results"
+  AGENT_THOUGHTS_TOPIC: "persistent://public/default/q.agentq.thoughts"
+  
+  # Health Check Configuration
+  HEALTH_CHECK_PATH: "/health"
+  HEALTH_CHECK_PORT: "8000"
+  
+  # Observability
+  ENABLE_TRACING: "true"
+  ENABLE_METRICS: "true"
+  ENABLE_PROMETHEUS: "true"
+  
+  # Database Configuration
+  IGNITE_ENABLED: "true"
+  IGNITE_HOST: "ignite-cluster"
+  IGNITE_PORT: "10800"
+  
+  # Vector Store Configuration
+  VECTORSTORE_URL: "http://vectorstore-q:8001"
+  
+  # Knowledge Graph Configuration
+  KNOWLEDGEGRAPH_URL: "http://knowledgegraphq:8000"
+  
+  # Quantum Pulse Configuration
+  QUANTUMPULSE_URL: "http://quantumpulse-api:8000"
+  
+  # Manager Q Configuration
+  MANAGERQ_URL: "http://manager-q:8003"
+  
+  # LLM Configuration
+  DEFAULT_MODEL: "gpt-4"
+  MAX_TOKENS: "4096"
+  TEMPERATURE: "0.7"
+  LLM_TIMEOUT: "60"
+  
+  # Tool Configuration
+  ENABLE_KUBERNETES_TOOLS: "true"
+  ENABLE_DEVOPS_TOOLS: "true"
+  ENABLE_SEARCH_TOOLS: "true"
+  ENABLE_KNOWLEDGE_TOOLS: "true"
+  ENABLE_INTEGRATION_TOOLS: "true"
+  
+  # Memory Configuration
+  MEMORY_ENABLED: "true"
+  MEMORY_PERSISTENCE: "true"
+  MEMORY_TTL: "3600"
+  
+  # Security Configuration
+  ENABLE_CORS: "true"
+  ALLOWED_ORIGINS: "*"
+  
+  # Performance Configuration
+  WORKER_THREADS: "4"
+  REQUEST_TIMEOUT: "300"
+  
+  # Logging Configuration
+  LOG_FORMAT: "json"
+  LOG_TO_PULSAR: "true"
+  LOG_PULSAR_TOPIC: "persistent://public/default/agentq-logs"
+  
+  # Environment
+  ENVIRONMENT: "production"
+  
+  # Kubernetes Configuration
+  KUBERNETES_NAMESPACE: "q-platform"
+  KUBERNETES_SERVICE_ACCOUNT: "agentq"
+  
+  # Collaboration Configuration
+  ENABLE_MULTI_AGENT_COLLABORATION: "true"
+  COLLABORATION_TIMEOUT: "300"
+  
+  # Quantum Configuration
+  ENABLE_QUANTUM_ALGORITHMS: "true"
+  QUANTUM_BACKEND: "simulator"
+  QUANTUM_OPTIMIZATION_ENABLED: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentq-devops-config
+  labels:
+    app: agentq-devops
+    component: config
+data:
+  # Application Configuration
+  SERVICE_NAME: "agentq-devops"
+  SERVICE_VERSION: "1.0.0"
+  LOG_LEVEL: "INFO"
+  METRICS_PORT: "9091"
+  
+  # Network Configuration
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  
+  # Agent Configuration
+  AGENT_PERSONALITY: "devops"
+  MAX_MEMORY_SIZE: "2000"
+  TOOL_TIMEOUT: "60"
+  MAX_RETRIES: "5"
+  RETRY_DELAY: "2.0"
+  
+  # DevOps Specific Configuration
+  ENABLE_KUBECTL_TOOLS: "true"
+  ENABLE_TERRAFORM_TOOLS: "true"
+  ENABLE_DOCKER_TOOLS: "true"
+  ENABLE_CI_CD_TOOLS: "true"
+  ENABLE_MONITORING_TOOLS: "true"
+  
+  # Kubernetes Tools Configuration
+  KUBECTL_TIMEOUT: "300"
+  KUBECTL_DRY_RUN: "false"
+  ENABLE_CLUSTER_ADMIN: "false"
+  
+  # Git Integration
+  ENABLE_GIT_TOOLS: "true"
+  GIT_DEFAULT_BRANCH: "main"
+  GIT_TIMEOUT: "60"
+  
+  # CI/CD Integration
+  ENABLE_GITHUB_ACTIONS: "true"
+  ENABLE_GITLAB_CI: "true"
+  ENABLE_JENKINS: "true"
+  
+  # Monitoring Integration
+  PROMETHEUS_URL: "http://prometheus-server:9090"
+  GRAFANA_URL: "http://grafana:3000"
+  ALERTMANAGER_URL: "http://alertmanager:9093"
+  
+  # Infrastructure Configuration
+  TERRAFORM_WORKSPACE: "default"
+  TERRAFORM_BACKEND: "s3"
+  
+  # Security Tools
+  ENABLE_SECURITY_SCANNING: "true"
+  ENABLE_VULNERABILITY_CHECKS: "true"
+  SECURITY_SCAN_TIMEOUT: "600"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentq-data-analyst-config
+  labels:
+    app: agentq-data-analyst
+    component: config
+data:
+  # Application Configuration
+  SERVICE_NAME: "agentq-data-analyst"
+  SERVICE_VERSION: "1.0.0"
+  LOG_LEVEL: "INFO"
+  METRICS_PORT: "9091"
+  
+  # Agent Configuration
+  AGENT_PERSONALITY: "data-analyst"
+  MAX_MEMORY_SIZE: "5000"
+  TOOL_TIMEOUT: "120"
+  MAX_RETRIES: "3"
+  RETRY_DELAY: "1.0"
+  
+  # Data Analysis Configuration
+  ENABLE_PANDAS_TOOLS: "true"
+  ENABLE_NUMPY_TOOLS: "true"
+  ENABLE_SCIPY_TOOLS: "true"
+  ENABLE_SKLEARN_TOOLS: "true"
+  ENABLE_PLOTLY_TOOLS: "true"
+  
+  # Database Connections
+  ENABLE_SQL_TOOLS: "true"
+  ENABLE_NOSQL_TOOLS: "true"
+  CASSANDRA_URL: "cassandra-cluster:9042"
+  ELASTICSEARCH_URL: "elasticsearch:9200"
+  
+  # Big Data Tools
+  ENABLE_SPARK_TOOLS: "true"
+  SPARK_MASTER: "spark://spark-master:7077"
+  SPARK_DRIVER_MEMORY: "2g"
+  SPARK_EXECUTOR_MEMORY: "4g"
+  
+  # ML Configuration
+  ENABLE_ML_TOOLS: "true"
+  ML_MODEL_REGISTRY: "http://model-registry:8080"
+  ENABLE_AUTOML: "true"
+  
+  # Data Visualization
+  ENABLE_VISUALIZATION_TOOLS: "true"
+  CHART_OUTPUT_FORMAT: "png"
+  CHART_DPI: "300" 

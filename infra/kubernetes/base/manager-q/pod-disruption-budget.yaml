@@ -1,0 +1,26 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: manager-q-pdb
+  labels:
+    app: manager-q
+    component: availability
+spec:
+  minAvailable: 2  # Ensure at least 2 pods are always available
+  selector:
+    matchLabels:
+      app: manager-q
+---
+# Additional PDB for zero-downtime deployments
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: manager-q-deployment-pdb
+  labels:
+    app: manager-q
+    component: availability
+spec:
+  maxUnavailable: 1  # Only allow one pod to be unavailable during deployments
+  selector:
+    matchLabels:
+      app: manager-q 

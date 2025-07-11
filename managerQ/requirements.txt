@@ -10,6 +10,34 @@ fastavro
 jinja2
 sentence-transformers
 
+# Advanced ML Capabilities
+torch>=2.0.0
+torchvision
+torchaudio
+transformers
+datasets
+accelerate
+pyspark>=3.4.0
+gymnasium
+stable-baselines3
+scikit-learn
+mlflow
+optuna
+ray[tune]
+opencv-python
+librosa
+speechrecognition
+huggingface-hub
+tensorboard
+wandb
+numpy
+pandas
+matplotlib
+seaborn
+plotly
+joblib
+cloudpickle
+
 # Testing
 pytest
 pytest-mock

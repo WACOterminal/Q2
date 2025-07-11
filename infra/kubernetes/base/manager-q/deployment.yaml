@@ -3,8 +3,17 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: manager-q
+  labels:
+    app: manager-q
+    component: service
+    version: v1.0.0
 spec:
-  replicas: 2
+  replicas: 3  # Increased for high availability
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Ensure zero downtime
   selector:
     matchLabels:
       app: manager-q
@@ -12,34 +21,170 @@ spec:
     metadata:
       labels:
         app: manager-q
+        component: service
+        version: v1.0.0
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+        # Istio sidecar injection
+        sidecar.istio.io/inject: "true"
+        # Vault agent injection
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "manager-q"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/manager-q"
     spec:
+      serviceAccountName: manager-q
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
       - name: manager-q
         image: your-registry/manager-q:latest
+        imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8003
+        - name: http
+          containerPort: 8003
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        - name: health
+          containerPort: 8003
+          protocol: TCP
+        # Environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: manager-q-config
+        - secretRef:
+            name: manager-q-secrets
+        # Additional environment variables
         env:
-        - name: METRICS_PORT
-          value: "9091"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+        # Resource management
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+            ephemeral-storage: "1Gi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+            ephemeral-storage: "2Gi"
+        # Health checks
         readinessProbe:
           httpGet:
             path: /health
             port: 8003
-          initialDelaySeconds: 15
+            scheme: HTTP
+          initialDelaySeconds: 20
           periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /health
             port: 8003
+            scheme: HTTP
           initialDelaySeconds: 30
           periodSeconds: 20
-        resources:
-          requests:
-            cpu: "250m"
-            memory: "256Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi" 
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        # Startup probe for slow initialization
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8003
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 30
+        # Volume mounts for writable directories
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: cache-volume
+          mountPath: /app/cache
+        - name: logs-volume
+          mountPath: /app/logs
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "sleep 15"  # Allow time for graceful shutdown
+      # Volumes for writable directories
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: cache-volume
+        emptyDir: {}
+      - name: logs-volume
+        emptyDir: {}
+      # Pod-level configurations
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+      # Node selection
+      nodeSelector:
+        kubernetes.io/os: linux
+      # Tolerations for dedicated nodes
+      tolerations:
+      - key: "q-platform"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      # Affinity rules
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - manager-q
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - compute-optimized 

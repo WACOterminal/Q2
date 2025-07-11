@@ -1,0 +1,76 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: quantumpulse-hpa
+  labels:
+    app: quantumpulse
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: quantumpulse
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: inference_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "10"
+  - type: Pods
+    pods:
+      metric:
+        name: inference_queue_depth
+      target:
+        type: AverageValue
+        averageValue: "5"
+  - type: Pods
+    pods:
+      metric:
+        name: average_inference_latency_ms
+      target:
+        type: AverageValue
+        averageValue: "3000"
+  - type: Pods
+    pods:
+      metric:
+        name: model_cache_hit_ratio
+      target:
+        type: AverageValue
+        averageValue: "0.8"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 120
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 120
+      - type: Pods
+        value: 1
+        periodSeconds: 600
+      selectPolicy: Min 

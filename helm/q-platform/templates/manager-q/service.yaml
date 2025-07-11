@@ -1,0 +1,55 @@
+{{- if .Values.services.managerQ.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "q-platform.fullname" . }}-manager-q
+  labels:
+    {{- include "q-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager-q
+  {{- with .Values.services.managerQ.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.services.managerQ.service.type }}
+  {{- if and .Values.services.managerQ.service.clusterIP (eq .Values.services.managerQ.service.type "ClusterIP") }}
+  clusterIP: {{ .Values.services.managerQ.service.clusterIP }}
+  {{- end }}
+  {{- if .Values.services.managerQ.service.sessionAffinity }}
+  sessionAffinity: {{ .Values.services.managerQ.service.sessionAffinity }}
+  {{- end }}
+  {{- if .Values.services.managerQ.service.sessionAffinityConfig }}
+  sessionAffinityConfig:
+    {{- toYaml .Values.services.managerQ.service.sessionAffinityConfig | nindent 4 }}
+  {{- end }}
+  {{- if or (eq .Values.services.managerQ.service.type "LoadBalancer") (eq .Values.services.managerQ.service.type "NodePort") }}
+  externalTrafficPolicy: {{ .Values.services.managerQ.service.externalTrafficPolicy | default "Cluster" }}
+  {{- end }}
+  {{- if and (eq .Values.services.managerQ.service.type "LoadBalancer") (not (empty .Values.services.managerQ.service.loadBalancerSourceRanges)) }}
+  loadBalancerSourceRanges: {{ .Values.services.managerQ.service.loadBalancerSourceRanges }}
+  {{- end }}
+  {{- if and (eq .Values.services.managerQ.service.type "LoadBalancer") (not (empty .Values.services.managerQ.service.loadBalancerIP)) }}
+  loadBalancerIP: {{ .Values.services.managerQ.service.loadBalancerIP }}
+  {{- end }}
+  ports:
+    - name: http
+      port: {{ .Values.services.managerQ.service.port }}
+      protocol: TCP
+      targetPort: http
+      {{- if and (or (eq .Values.services.managerQ.service.type "NodePort") (eq .Values.services.managerQ.service.type "LoadBalancer")) (not (empty .Values.services.managerQ.service.nodePort)) }}
+      nodePort: {{ .Values.services.managerQ.service.nodePort }}
+      {{- end }}
+    - name: metrics
+      port: 9091
+      protocol: TCP
+      targetPort: metrics
+      {{- if and (or (eq .Values.services.managerQ.service.type "NodePort") (eq .Values.services.managerQ.service.type "LoadBalancer")) (not (empty .Values.services.managerQ.service.metricsNodePort)) }}
+      nodePort: {{ .Values.services.managerQ.service.metricsNodePort }}
+      {{- end }}
+    {{- if .Values.services.managerQ.service.extraPorts }}
+    {{- include "q-platform.tplvalues.render" (dict "value" .Values.services.managerQ.service.extraPorts "context" $) | nindent 4 }}
+    {{- end }}
+  selector:
+    {{- include "q-platform.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: manager-q
+{{- end }} 

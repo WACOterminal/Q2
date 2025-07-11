@@ -1,0 +1,76 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: integrationhub-hpa
+  labels:
+    app: integrationhub
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: integrationhub
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: integration_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  - type: Pods
+    pods:
+      metric:
+        name: active_integrations
+      target:
+        type: AverageValue
+        averageValue: "50"
+  - type: Pods
+    pods:
+      metric:
+        name: webhook_queue_depth
+      target:
+        type: AverageValue
+        averageValue: "100"
+  - type: Pods
+    pods:
+      metric:
+        name: failed_integration_ratio
+      target:
+        type: AverageValue
+        averageValue: "0.05"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 3
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 300
+      selectPolicy: Min 

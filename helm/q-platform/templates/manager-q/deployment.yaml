@@ -1,0 +1,168 @@
+{{- if .Values.services.managerQ.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "q-platform.fullname" . }}-manager-q
+  labels:
+    {{- include "q-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager-q
+spec:
+  replicas: {{ .Values.services.managerQ.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "q-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: manager-q
+  template:
+    metadata:
+      labels:
+        {{- include "q-platform.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: manager-q
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/manager-q/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/manager-q/secret.yaml") . | sha256sum }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+        {{- if .Values.istio.enabled }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
+        {{- if .Values.security.vault.enabled }}
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "manager-q"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/manager-q"
+        {{- end }}
+        {{- with .Values.services.managerQ.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "q-platform.fullname" . }}-manager-q
+      securityContext:
+        {{- toYaml .Values.services.managerQ.podSecurityContext | nindent 8 }}
+      containers:
+        - name: manager-q
+          securityContext:
+            {{- toYaml .Values.services.managerQ.securityContext | nindent 12 }}
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.services.managerQ.image.repository }}:{{ .Values.services.managerQ.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.services.managerQ.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8003
+              protocol: TCP
+            - name: metrics
+              containerPort: 9091
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "q-platform.fullname" . }}-manager-q-config
+            - secretRef:
+                name: {{ include "q-platform.fullname" . }}-manager-q-secret
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: ENVIRONMENT
+              value: {{ .Values.global.environment }}
+            - name: DOMAIN
+              value: {{ .Values.global.domain }}
+            {{- if .Values.services.managerQ.extraEnvVars }}
+            {{- include "q-platform.tplvalues.render" (dict "value" .Values.services.managerQ.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          {{- if .Values.services.managerQ.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.services.managerQ.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.services.managerQ.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.services.managerQ.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.services.managerQ.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.services.managerQ.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.services.managerQ.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.services.managerQ.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.services.managerQ.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.services.managerQ.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.services.managerQ.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.services.managerQ.readinessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.services.managerQ.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.services.managerQ.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.services.managerQ.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.services.managerQ.startupProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.services.managerQ.startupProbe.successThreshold }}
+            failureThreshold: {{ .Values.services.managerQ.startupProbe.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.services.managerQ.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: cache-volume
+              mountPath: /app/cache
+            - name: logs-volume
+              mountPath: /app/logs
+            {{- if .Values.services.managerQ.extraVolumeMounts }}
+            {{- include "q-platform.tplvalues.render" (dict "value" .Values.services.managerQ.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "sleep 15"
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+        - name: cache-volume
+          emptyDir: {}
+        - name: logs-volume
+          emptyDir: {}
+        {{- if .Values.services.managerQ.extraVolumes }}
+        {{- include "q-platform.tplvalues.render" (dict "value" .Values.services.managerQ.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
+      {{- with .Values.services.managerQ.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.services.managerQ.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.services.managerQ.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+{{- end }} 

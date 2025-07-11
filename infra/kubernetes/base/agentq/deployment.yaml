@@ -1,0 +1,536 @@
+# Default AgentQ Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentq-default
+  labels:
+    app: agentq-default
+    component: service
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: agentq-default
+  template:
+    metadata:
+      labels:
+        app: agentq-default
+        component: service
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+        sidecar.istio.io/inject: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "agentq"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/agentq"
+    spec:
+      serviceAccountName: agentq
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: agentq
+        image: your-registry/agentq:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: agentq-config
+        - secretRef:
+            name: agentq-secrets
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: AGENT_ID
+          value: "$(POD_NAME)"
+        - name: AGENT_TASK_TOPIC
+          value: "persistent://public/default/$(POD_NAME)-tasks"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+            ephemeral-storage: 1Gi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+            ephemeral-storage: 2Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 45
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 30
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: cache-volume
+          mountPath: /app/cache
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: memory-volume
+          mountPath: /app/memory
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "sleep 15"
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: cache-volume
+        emptyDir: {}
+      - name: logs-volume
+        emptyDir: {}
+      - name: memory-volume
+        emptyDir: {}
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - key: "q-platform"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - agentq-default
+              topologyKey: kubernetes.io/hostname
+---
+# DevOps AgentQ Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentq-devops
+  labels:
+    app: agentq-devops
+    component: service
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: agentq-devops
+  template:
+    metadata:
+      labels:
+        app: agentq-devops
+        component: service
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+        sidecar.istio.io/inject: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "agentq-devops"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/agentq-devops"
+    spec:
+      serviceAccountName: agentq-devops
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: agentq-devops
+        image: your-registry/agentq:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: agentq-devops-config
+        - secretRef:
+            name: agentq-secrets
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: AGENT_ID
+          value: "$(POD_NAME)"
+        - name: AGENT_TASK_TOPIC
+          value: "persistent://public/default/$(POD_NAME)-tasks"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE  # For DevOps tools that need to bind to ports
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+            ephemeral-storage: 2Gi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+            ephemeral-storage: 4Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 60
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: cache-volume
+          mountPath: /app/cache
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: memory-volume
+          mountPath: /app/memory
+        - name: tools-volume
+          mountPath: /app/tools
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "sleep 20"
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: cache-volume
+        emptyDir: {}
+      - name: logs-volume
+        emptyDir: {}
+      - name: memory-volume
+        emptyDir: {}
+      - name: tools-volume
+        emptyDir: {}
+      terminationGracePeriodSeconds: 45
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/os: linux
+        node-type: compute-optimized
+      tolerations:
+      - key: "q-platform"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - agentq-devops
+              topologyKey: kubernetes.io/hostname
+---
+# Data Analyst AgentQ Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentq-data-analyst
+  labels:
+    app: agentq-data-analyst
+    component: service
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: agentq-data-analyst
+  template:
+    metadata:
+      labels:
+        app: agentq-data-analyst
+        component: service
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+        sidecar.istio.io/inject: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "agentq-data-analyst"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/agentq-data-analyst"
+    spec:
+      serviceAccountName: agentq-data-analyst
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: agentq-data-analyst
+        image: your-registry/agentq:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: agentq-data-analyst-config
+        - secretRef:
+            name: agentq-secrets
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: AGENT_ID
+          value: "$(POD_NAME)"
+        - name: AGENT_TASK_TOPIC
+          value: "persistent://public/default/$(POD_NAME)-tasks"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 1Gi
+            ephemeral-storage: 4Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+            ephemeral-storage: 8Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 90
+          periodSeconds: 60
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 60
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: cache-volume
+          mountPath: /app/cache
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: memory-volume
+          mountPath: /app/memory
+        - name: data-volume
+          mountPath: /app/data
+        - name: models-volume
+          mountPath: /app/models
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "sleep 30"
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: cache-volume
+        emptyDir: {}
+      - name: logs-volume
+        emptyDir: {}
+      - name: memory-volume
+        emptyDir: {}
+      - name: data-volume
+        emptyDir:
+          sizeLimit: 10Gi
+      - name: models-volume
+        emptyDir:
+          sizeLimit: 5Gi
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/os: linux
+        node-type: memory-optimized
+      tolerations:
+      - key: "q-platform"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      - key: "memory-optimized"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - memory-optimized
+                - compute-optimized 

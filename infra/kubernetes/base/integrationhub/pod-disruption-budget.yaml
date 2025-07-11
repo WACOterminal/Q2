@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: integrationhub-pdb
+  labels:
+    app: integrationhub
+    component: availability
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: integrationhub 

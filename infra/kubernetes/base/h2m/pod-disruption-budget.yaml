@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: h2m-pdb
+  labels:
+    app: h2m
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: h2m 

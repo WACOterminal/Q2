@@ -1,0 +1,594 @@
+name: Comprehensive CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      force_deploy:
+        description: 'Force deployment even if tests fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+  HELM_VERSION: "3.13.0"
+  KUBECTL_VERSION: "1.28.0"
+  
+jobs:
+  # Pre-flight checks and validation
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      version: ${{ steps.version.outputs.version }}
+      environment: ${{ steps.environment.outputs.environment }}
+      services_changed: ${{ steps.changes.outputs.services_changed }}
+      infra_changed: ${{ steps.changes.outputs.infra_changed }}
+      docs_changed: ${{ steps.changes.outputs.docs_changed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            services:
+              - 'agentQ/**'
+              - 'managerQ/**'
+              - 'H2M/**'
+              - 'QuantumPulse/**'
+              - 'VectorStoreQ/**'
+              - 'KnowledgeGraphQ/**'
+              - 'IntegrationHub/**'
+              - 'UserProfileQ/**'
+              - 'WebAppQ/**'
+            infra:
+              - 'infra/**'
+              - 'helm/**'
+              - 'scripts/**'
+            docs:
+              - 'docs/**'
+              - '*.md'
+              - 'mkdocs.yml'
+
+      - name: Set service matrix
+        id: set-matrix
+        run: |
+          # Define all services that need to be built and deployed
+          SERVICES='["agentQ", "managerQ", "H2M", "QuantumPulse", "VectorStoreQ", "KnowledgeGraphQ", "IntegrationHub", "UserProfileQ", "WebAppQ"]'
+          echo "matrix=${SERVICES}" >> $GITHUB_OUTPUT
+
+      - name: Generate version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            VERSION="pr-${{ github.event.number }}-${{ github.sha }}"
+          else
+            VERSION="${{ github.sha }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Determine environment
+        id: environment
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENVIRONMENT="production"
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            ENVIRONMENT="staging"
+          else
+            ENVIRONMENT="development"
+          fi
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+
+  # Security scanning
+  security:
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.services_changed == 'true' || needs.preflight.outputs.infra_changed == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          languages: python, javascript
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: 'https://api.q-platform.local'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+
+  # Code quality and linting
+  quality:
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.services_changed == 'true'
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.preflight.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort mypy pytest pytest-cov bandit safety
+          if [ -f ${{ matrix.service }}/requirements.txt ]; then
+            pip install -r ${{ matrix.service }}/requirements.txt
+          fi
+
+      - name: Run Black code formatter
+        run: |
+          black --check --diff ${{ matrix.service }}/
+
+      - name: Run isort import sorter
+        run: |
+          isort --check-only --diff ${{ matrix.service }}/
+
+      - name: Run flake8 linter
+        run: |
+          flake8 ${{ matrix.service }}/ --max-line-length=88 --extend-ignore=E203,W503
+
+      - name: Run mypy type checker
+        run: |
+          mypy ${{ matrix.service }}/ --ignore-missing-imports
+
+      - name: Run bandit security linter
+        run: |
+          bandit -r ${{ matrix.service }}/ -f json -o bandit-report.json
+        continue-on-error: true
+
+      - name: Run safety security checker
+        run: |
+          safety check --json --output safety-report.json
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports-${{ matrix.service }}
+          path: |
+            bandit-report.json
+            safety-report.json
+
+  # Unit and integration tests
+  test:
+    runs-on: ubuntu-latest
+    needs: [preflight, quality]
+    if: needs.preflight.outputs.services_changed == 'true'
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.preflight.outputs.matrix) }}
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-asyncio pytest-mock
+          if [ -f ${{ matrix.service }}/requirements.txt ]; then
+            pip install -r ${{ matrix.service }}/requirements.txt
+          fi
+          if [ -f ${{ matrix.service }}/requirements-test.txt ]; then
+            pip install -r ${{ matrix.service }}/requirements-test.txt
+          fi
+
+      - name: Run unit tests
+        run: |
+          cd ${{ matrix.service }}
+          pytest tests/unit/ -v --cov=./ --cov-report=xml --cov-report=html --junitxml=junit.xml
+        env:
+          PYTHONPATH: ${{ github.workspace }}/${{ matrix.service }}
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          TEST_REDIS_URL: redis://localhost:6379
+
+      - name: Run integration tests
+        run: |
+          cd ${{ matrix.service }}
+          pytest tests/integration/ -v --cov=./ --cov-append --cov-report=xml --cov-report=html --junitxml=junit-integration.xml
+        env:
+          PYTHONPATH: ${{ github.workspace }}/${{ matrix.service }}
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          TEST_REDIS_URL: redis://localhost:6379
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ${{ matrix.service }}/coverage.xml
+          flags: ${{ matrix.service }}
+          name: codecov-${{ matrix.service }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-${{ matrix.service }}
+          path: |
+            ${{ matrix.service }}/junit.xml
+            ${{ matrix.service }}/junit-integration.xml
+            ${{ matrix.service }}/htmlcov/
+
+  # Performance and load testing
+  performance:
+    runs-on: ubuntu-latest
+    needs: [preflight, test]
+    if: needs.preflight.outputs.services_changed == 'true' && github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        service: ['managerQ', 'H2M', 'QuantumPulse', 'VectorStoreQ']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install performance testing tools
+        run: |
+          pip install locust pytest-benchmark
+
+      - name: Run performance tests
+        run: |
+          cd ${{ matrix.service }}
+          if [ -f tests/performance/locustfile.py ]; then
+            locust -f tests/performance/locustfile.py --headless -u 10 -r 2 -t 60s --host http://localhost:8000
+          fi
+
+      - name: Run benchmark tests
+        run: |
+          cd ${{ matrix.service }}
+          if [ -d tests/benchmark ]; then
+            pytest tests/benchmark/ -v --benchmark-json=benchmark-results.json
+          fi
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: performance-results-${{ matrix.service }}
+          path: |
+            ${{ matrix.service }}/benchmark-results.json
+
+  # Build and publish Docker images
+  build:
+    runs-on: ubuntu-latest
+    needs: [preflight, security, test]
+    if: needs.preflight.outputs.services_changed == 'true'
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.preflight.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            BUILD_VERSION=${{ needs.preflight.outputs.version }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Run container security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+
+      - name: Upload image scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-image-results.sarif'
+
+  # Infrastructure validation
+  infrastructure:
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.infra_changed == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive infra/terraform/
+
+      - name: Terraform Validate
+        run: |
+          cd infra/terraform
+          terraform init -backend=false
+          terraform validate
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Helm Lint
+        run: |
+          helm lint helm/q-platform/
+
+      - name: Helm Template Test
+        run: |
+          helm template test-release helm/q-platform/ --values helm/q-platform/values-dev.yaml > /tmp/manifests.yaml
+          kubectl --dry-run=client apply -f /tmp/manifests.yaml
+
+      - name: Validate Kubernetes manifests
+        run: |
+          # Install kubeval
+          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin
+          
+          # Validate manifests
+          find infra/kubernetes/base -name "*.yaml" -exec kubeval {} \;
+
+      - name: Run Checkov on infrastructure
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infra/
+          framework: terraform,kubernetes
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+
+      - name: Upload Checkov scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: checkov-results.sarif
+
+  # Deploy to environment
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [preflight, build, infrastructure]
+    if: |
+      (needs.preflight.outputs.services_changed == 'true' || needs.preflight.outputs.infra_changed == 'true') &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch')
+    environment: ${{ needs.preflight.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Configure Kubernetes context
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          kubectl config use-context ${{ needs.preflight.outputs.environment }}
+
+      - name: Deploy infrastructure with Terraform
+        if: needs.preflight.outputs.infra_changed == 'true'
+        run: |
+          cd infra/terraform
+          terraform init
+          terraform plan -var-file="environments/${{ needs.preflight.outputs.environment }}.tfvars"
+          terraform apply -auto-approve -var-file="environments/${{ needs.preflight.outputs.environment }}.tfvars"
+        env:
+          TF_VAR_environment: ${{ needs.preflight.outputs.environment }}
+          TF_VAR_image_tag: ${{ needs.preflight.outputs.version }}
+
+      - name: Deploy Q Platform with Helm
+        if: needs.preflight.outputs.services_changed == 'true' || needs.preflight.outputs.infra_changed == 'true'
+        run: |
+          # Add Helm repositories
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add milvus https://milvus-io.github.io/milvus-helm/
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo add hashicorp https://helm.releases.hashicorp.com
+          helm repo add external-secrets https://charts.external-secrets.io
+          helm repo update
+          
+          # Deploy or upgrade Q Platform
+          helm upgrade --install q-platform helm/q-platform/ \
+            --namespace q-platform \
+            --create-namespace \
+            --values helm/q-platform/values-${{ needs.preflight.outputs.environment }}.yaml \
+            --set global.imageTag=${{ needs.preflight.outputs.version }} \
+            --set global.environment=${{ needs.preflight.outputs.environment }} \
+            --timeout 20m \
+            --wait
+
+      - name: Run deployment verification
+        run: |
+          # Wait for all deployments to be ready
+          kubectl rollout status deployment/manager-q -n q-platform --timeout=600s
+          kubectl rollout status deployment/agent-q-default -n q-platform --timeout=600s
+          kubectl rollout status deployment/h2m-service -n q-platform --timeout=600s
+          kubectl rollout status deployment/quantum-pulse-api -n q-platform --timeout=600s
+          kubectl rollout status deployment/vector-store-q -n q-platform --timeout=600s
+          kubectl rollout status deployment/knowledge-graph-q -n q-platform --timeout=600s
+          kubectl rollout status deployment/integration-hub -n q-platform --timeout=600s
+          kubectl rollout status deployment/user-profile-q -n q-platform --timeout=600s
+          kubectl rollout status deployment/webapp-q -n q-platform --timeout=600s
+          
+          # Run health checks
+          kubectl get pods -n q-platform -l app.kubernetes.io/name=q-platform
+          kubectl get services -n q-platform
+          
+          # Run basic smoke tests
+          ./scripts/smoke-tests.sh ${{ needs.preflight.outputs.environment }}
+
+      - name: Run post-deployment tests
+        run: |
+          # Run end-to-end tests
+          if [ -f tests/e2e/test-suite.sh ]; then
+            ./tests/e2e/test-suite.sh ${{ needs.preflight.outputs.environment }}
+          fi
+
+  # Cleanup and notifications
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: [preflight, deploy]
+    if: always()
+    steps:
+      - name: Clean up PR environments
+        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+        run: |
+          # Clean up PR-specific resources
+          echo "Cleaning up PR environment for PR #${{ github.event.number }}"
+          # Add cleanup logic here
+
+      - name: Notify Slack on success
+        if: success() && github.ref == 'refs/heads/main'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          message: |
+            ✅ Q Platform deployment successful!
+            Environment: ${{ needs.preflight.outputs.environment }}
+            Version: ${{ needs.preflight.outputs.version }}
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on failure
+        if: failure() && github.ref == 'refs/heads/main'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#deployments'
+          message: |
+            ❌ Q Platform deployment failed!
+            Environment: ${{ needs.preflight.outputs.environment }}
+            Version: ${{ needs.preflight.outputs.version }}
+            Commit: ${{ github.sha }}
+            Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Update deployment status
+        if: always()
+        run: |
+          # Update deployment tracking
+          echo "Deployment completed with status: ${{ job.status }}"
+          echo "Environment: ${{ needs.preflight.outputs.environment }}"
+          echo "Version: ${{ needs.preflight.outputs.version }}" 

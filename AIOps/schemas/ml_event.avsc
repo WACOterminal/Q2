@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "MLEvent",
+  "namespace": "q.aiops.ml_events",
+  "doc": "Schema for AI/ML related events in the Q2 Platform for monitoring.",
+  "fields": [
+    {"name": "event_id", "type": "string", "doc": "Unique identifier for the event"},
+    {"name": "timestamp", "type": {"type": "long", "logicalType": "timestamp-millis"}, "doc": "Timestamp of the event"},
+    {"name": "event_type", "type": "string", "doc": "Type of ML event (e.g., model_inference, model_training, data_drift, model_drift)"},
+    {"name": "model_id", "type": ["null", "string"], "default": null, "doc": "ID of the model related to the event"},
+    {"name": "model_version", "type": ["null", "string"], "default": null, "doc": "Version of the model"},
+    {"name": "service_name", "type": "string", "doc": "Name of the service emitting the event (e.g., managerQ.automl_service)"},
+    {"name": "metrics", "type": {"type": "map", "values": ["null", "double", "long", "string", "boolean"]}, "doc": "Key-value pairs of relevant metrics"},
+    {"name": "metadata", "type": {"type": "map", "values": "string"}, "doc": "Additional metadata (e.g., agent_id, workflow_id)"},
+    {"name": "payload_summary", "type": ["null", "string"], "default": null, "doc": "Summary of the event payload, if applicable"},
+    {"name": "status", "type": ["null", "string"], "default": null, "doc": "Status of the operation (e.g., success, failure, in_progress)"}
+  ]
+} 

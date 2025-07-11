@@ -1,0 +1,113 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webappq-network-policy
+  labels:
+    app: webappq
+    component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: webappq
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Istio sidecar
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15090
+  # Allow from ingress controllers
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 3000
+  # Allow from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3000
+  # Allow from external (for public access)
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  # Allow to Istio sidecar
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15001
+  # Allow to Q Platform backend services
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8001
+    - protocol: TCP
+      port: 8002
+    - protocol: TCP
+      port: 8003
+    - protocol: TCP
+      port: 8004
+    - protocol: TCP
+      port: 8005
+    - protocol: TCP
+      port: 8006
+    - protocol: TCP
+      port: 8007
+    - protocol: TCP
+      port: 8008
+    - protocol: TCP
+      port: 8009
+    - protocol: TCP
+      port: 8010
+  # Allow to Kubernetes API
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  # Allow to Jaeger
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: jaeger
+    ports:
+    - protocol: TCP
+      port: 14268
+  # Allow to external services (DNS)
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow to external CDNs and services
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443 

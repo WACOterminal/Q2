@@ -6,16 +6,199 @@ shared_context:
   target_user_id: "default_user"
 
 tasks:
-  - task_id: "begin_proactive_assistance"
+  - task_id: "initialize_user_context"
     type: "task"
     agent_personality: "chief_of_staff"
     prompt: |
-      Your mission is to serve as the proactive, symbiotic partner to user '{{ shared_context.target_user_id }}'.
-
-      You must now begin your core cognitive loop:
-      1.  **Observe**: Listen to the user action stream.
-      2.  **Analyze**: Identify patterns of repetition or inefficiency.
-      3.  **Propose**: When an opportunity for automation is found, use the `propose_assistance` tool to offer help.
+      Initialize the proactive assistance context for user '{{ shared_context.target_user_id }}'.
       
-      This is a continuous, long-running task. Your goal is not to finish, but to perpetually serve. Begin.
-    dependencies: [] 
+      Gather initial information about:
+      1. User's current active projects and goals
+      2. Recent activity patterns and work habits
+      3. Preferred communication methods and times
+      4. Any existing automation or workflows they use
+      
+      Store this context for ongoing analysis.
+    dependencies: []
+
+  - task_id: "establish_monitoring_baseline"
+    type: "task"
+    agent_personality: "chief_of_staff"
+    prompt: |
+      Establish baseline metrics for proactive assistance monitoring:
+      
+      1. Set up activity pattern monitoring
+      2. Define efficiency metrics and thresholds
+      3. Configure notification preferences
+      4. Initialize the user behavior learning model
+      
+      This baseline will help identify deviations and opportunities for assistance.
+    dependencies: ["initialize_user_context"]
+
+  - task_id: "continuous_monitoring_loop"
+    type: "conditional"
+    dependencies: ["establish_monitoring_baseline"]
+    branches:
+      - condition: "true"
+        tasks:
+          - task_id: "observe_user_activity"
+            type: "task"
+            agent_personality: "chief_of_staff"
+            prompt: |
+              Monitor user '{{ shared_context.target_user_id }}' activity streams:
+              
+              1. **Current Session Activity**: Track current tasks, tool usage, and workflow patterns
+              2. **Recent History**: Analyze patterns from the last 24 hours
+              3. **Context Switches**: Identify when user switches between projects or tasks
+              4. **Efficiency Indicators**: Monitor completion rates, time spent on tasks, repetitive actions
+              
+              Return a structured analysis of current user state and activity patterns.
+            dependencies: []
+
+          - task_id: "analyze_patterns_and_inefficiencies"
+            type: "task"
+            agent_personality: "chief_of_staff"
+            prompt: |
+              Analyze the observed activity patterns for opportunities:
+              
+              Based on the activity data:
+              {{ tasks.observe_user_activity.result }}
+              
+              Identify:
+              1. **Repetitive Tasks**: Actions performed multiple times that could be automated
+              2. **Context Switching**: Frequent switching that might indicate missing tools or workflows
+              3. **Bottlenecks**: Areas where user spends disproportionate time
+              4. **Missed Opportunities**: Potential for better tool usage or workflow optimization
+              
+              Rank opportunities by impact and ease of implementation.
+            dependencies: ["observe_user_activity"]
+
+          - task_id: "evaluate_assistance_opportunities"
+            type: "conditional"
+            dependencies: ["analyze_patterns_and_inefficiencies"]
+            branches:
+              - condition: "{{ 'high_impact' in tasks.analyze_patterns_and_inefficiencies.result|lower }}"
+                tasks:
+                  - task_id: "prepare_assistance_proposal"
+                    type: "task"
+                    agent_personality: "chief_of_staff"
+                    prompt: |
+                      Prepare a specific assistance proposal based on the analysis:
+                      
+                      Analysis Results:
+                      {{ tasks.analyze_patterns_and_inefficiencies.result }}
+                      
+                      Create a detailed proposal including:
+                      1. **Problem Statement**: Clear description of the inefficiency
+                      2. **Proposed Solution**: Specific automation or workflow improvement
+                      3. **Implementation Steps**: How to implement the solution
+                      4. **Expected Benefits**: Time saved, error reduction, etc.
+                      5. **Risk Assessment**: Potential downsides or complications
+                      
+                      Format as a professional assistance recommendation.
+                    dependencies: []
+
+                  - task_id: "deliver_assistance_proposal"
+                    type: "task"
+                    agent_personality: "chief_of_staff"
+                    prompt: |
+                      Deliver the assistance proposal to the user using appropriate channels:
+                      
+                      Proposal:
+                      {{ tasks.prepare_assistance_proposal.result }}
+                      
+                      Use the `propose_assistance` tool to:
+                      1. Present the proposal professionally
+                      2. Offer to implement the solution
+                      3. Ask for user feedback or approval
+                      4. Provide options for customization
+                      
+                      Track the proposal for follow-up.
+                    dependencies: ["prepare_assistance_proposal"]
+
+                  - task_id: "handle_user_response"
+                    type: "conditional"
+                    dependencies: ["deliver_assistance_proposal"]
+                    branches:
+                      - condition: "{{ 'accepted' in tasks.deliver_assistance_proposal.result|lower }}"
+                        tasks:
+                          - task_id: "implement_assistance"
+                            type: "task"
+                            agent_personality: "chief_of_staff"
+                            prompt: |
+                              Implement the accepted assistance proposal:
+                              
+                              1. Execute the proposed automation or workflow
+                              2. Monitor implementation success
+                              3. Provide user with implementation details
+                              4. Set up ongoing monitoring for the new process
+                              
+                              Document the successful implementation for future reference.
+                            dependencies: []
+
+                          - task_id: "monitor_implementation"
+                            type: "task"
+                            agent_personality: "chief_of_staff"
+                            prompt: |
+                              Monitor the implemented assistance for effectiveness:
+                              
+                              1. Track usage and adoption
+                              2. Measure improvement in efficiency
+                              3. Identify any issues or user feedback
+                              4. Adjust implementation if needed
+                              
+                              Update the user behavior model with the successful intervention.
+                            dependencies: ["implement_assistance"]
+
+                      - condition: "{{ 'declined' in tasks.deliver_assistance_proposal.result|lower }}"
+                        tasks:
+                          - task_id: "learn_from_rejection"
+                            type: "task"
+                            agent_personality: "chief_of_staff"
+                            prompt: |
+                              Learn from the declined proposal:
+                              
+                              1. Analyze why the proposal was declined
+                              2. Update user preferences and boundaries
+                              3. Adjust future proposal criteria
+                              4. Respect user's workflow preferences
+                              
+                              Use this feedback to improve future assistance accuracy.
+                            dependencies: []
+
+                      - condition: "true"
+                        tasks:
+                          - task_id: "await_user_response"
+                            type: "task"
+                            agent_personality: "chief_of_staff"
+                            prompt: |
+                              Continue monitoring while awaiting user response to the proposal.
+                              
+                              Set appropriate follow-up timeline and continue observation.
+                            dependencies: []
+
+              - condition: "true"
+                tasks:
+                  - task_id: "continue_monitoring"
+                    type: "task"
+                    agent_personality: "chief_of_staff"
+                    prompt: |
+                      No high-impact opportunities identified at this time.
+                      
+                      Continue monitoring user activity and learning patterns.
+                      Update the user behavior model with current observations.
+                    dependencies: []
+
+          - task_id: "schedule_next_analysis"
+            type: "task"
+            agent_personality: "chief_of_staff"
+            prompt: |
+              Schedule the next analysis cycle:
+              
+              1. Determine optimal interval based on user activity level
+              2. Set up next monitoring checkpoint
+              3. Update analysis frequency based on recent findings
+              4. Maintain continuous background monitoring
+              
+              This task will trigger the next iteration of the monitoring loop.
+            dependencies: ["evaluate_assistance_opportunities"] 

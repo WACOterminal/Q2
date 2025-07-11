@@ -2,16 +2,47 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: quantumpulse-api
+  name: quantumpulse
+  labels:
+    app: quantumpulse
+    component: service
 spec:
-  selector:
-    app: quantumpulse-api
+  type: ClusterIP
   ports:
   - name: http
     protocol: TCP
     port: 8000
     targetPort: 8000
+  - name: api
+    protocol: TCP
+    port: 8001
+    targetPort: 8001
+  - name: admin
+    protocol: TCP
+    port: 8002
+    targetPort: 8002
   - name: metrics
     protocol: TCP
     port: 9091
-    targetPort: 9091 
+    targetPort: 9091
+  selector:
+    app: quantumpulse
+---
+# Service for external API access
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantumpulse-api
+  labels:
+    app: quantumpulse
+    component: service
+    service-type: external
+spec:
+  type: ClusterIP
+  ports:
+  - name: api
+    protocol: TCP
+    port: 8001
+    targetPort: 8001
+  selector:
+    app: quantumpulse 

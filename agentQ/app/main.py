@@ -666,6 +666,20 @@ def setup_default_agent(config: dict, vault_client: VaultClient):
     toolbox.register_tool(await_goal_tool)
     toolbox.register_tool(estimate_cost_tool) # Register the new tool
 
+    # Register ML capabilities tools (convenience tools for all agents)
+    try:
+        from agentQ.app.core.ml_tools import (
+            analyze_sentiment_tool,
+            get_ml_capabilities_summary_tool,
+            train_model_on_data_tool
+        )
+        toolbox.register_tool(analyze_sentiment_tool)
+        toolbox.register_tool(get_ml_capabilities_summary_tool)
+        toolbox.register_tool(train_model_on_data_tool)
+        logger.info("ML tools registered successfully")
+    except ImportError as e:
+        logger.warning(f"ML tools not available: {e}")
+
     return toolbox, ContextManager(config=config, vault_client=vault_client)
 
 def setup_reflector_agent(config: dict, vault_client: VaultClient):
@@ -813,6 +827,14 @@ def run_agent():
 
             # Start the new multi-agent coordinator
             threading.Thread(target=multi_agent_coordinator.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+            
+            # Start the ML specialist agent
+            try:
+                from agentQ.ml_specialist_agent import run_ml_specialist_agent
+                threading.Thread(target=run_ml_specialist_agent, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+                logger.info("ML Specialist Agent started successfully")
+            except ImportError as e:
+                logger.warning(f"ML Specialist Agent not available: {e}")
 
             # Start the new dynamic agent spawner
             threading.Thread(target=dynamic_agent_spawner.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()

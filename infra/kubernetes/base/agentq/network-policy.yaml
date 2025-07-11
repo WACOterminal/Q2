@@ -1,0 +1,494 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentq-default-network-policy
+  labels:
+    app: agentq-default
+    component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: agentq-default
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Istio sidecar
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15090
+  # Allow from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 9091
+  # Allow from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9091
+  # Allow from ingress controllers
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow to Istio sidecar
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15001
+  # Allow to same namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8001
+    - protocol: TCP
+      port: 8002
+    - protocol: TCP
+      port: 8003
+    - protocol: TCP
+      port: 8004
+    - protocol: TCP
+      port: 8005
+    - protocol: TCP
+      port: 8006
+    - protocol: TCP
+      port: 8007
+    - protocol: TCP
+      port: 8008
+    - protocol: TCP
+      port: 3000
+  # Allow to Pulsar
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: pulsar
+    ports:
+    - protocol: TCP
+      port: 6650
+    - protocol: TCP
+      port: 8080
+  # Allow to Ignite
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: ignite
+    ports:
+    - protocol: TCP
+      port: 10800
+  # Allow to Vault
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: vault
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow to Keycloak
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: keycloak
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow to Kubernetes API
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  # Allow to Jaeger
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: jaeger
+    ports:
+    - protocol: TCP
+      port: 14268
+  # Allow to external services (DNS)
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow to external HTTPS services
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentq-devops-network-policy
+  labels:
+    app: agentq-devops
+    component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: agentq-devops
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Istio sidecar
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15090
+  # Allow from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 9091
+  # Allow from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9091
+  # Allow from ingress controllers
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow to Istio sidecar
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15001
+  # Allow to same namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8001
+    - protocol: TCP
+      port: 8002
+    - protocol: TCP
+      port: 8003
+    - protocol: TCP
+      port: 8004
+    - protocol: TCP
+      port: 8005
+    - protocol: TCP
+      port: 8006
+    - protocol: TCP
+      port: 8007
+    - protocol: TCP
+      port: 8008
+    - protocol: TCP
+      port: 3000
+  # Allow to Pulsar
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: pulsar
+    ports:
+    - protocol: TCP
+      port: 6650
+    - protocol: TCP
+      port: 8080
+  # Allow to Ignite
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: ignite
+    ports:
+    - protocol: TCP
+      port: 10800
+  # Allow to Vault
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: vault
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow to Keycloak
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: keycloak
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow to Kubernetes API (DevOps needs extended access)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  # Allow to monitoring systems
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 9093
+  # Allow to Jaeger
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: jaeger
+    ports:
+    - protocol: TCP
+      port: 14268
+  # Allow to external services (DNS)
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow to external HTTPS services (for DevOps tools)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 22
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentq-data-analyst-network-policy
+  labels:
+    app: agentq-data-analyst
+    component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: agentq-data-analyst
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Istio sidecar
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15090
+  # Allow from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 9091
+  # Allow from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9091
+  # Allow from ingress controllers
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow to Istio sidecar
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 15001
+  # Allow to same namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: q-platform
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8001
+    - protocol: TCP
+      port: 8002
+    - protocol: TCP
+      port: 8003
+    - protocol: TCP
+      port: 8004
+    - protocol: TCP
+      port: 8005
+    - protocol: TCP
+      port: 8006
+    - protocol: TCP
+      port: 8007
+    - protocol: TCP
+      port: 8008
+    - protocol: TCP
+      port: 3000
+  # Allow to Pulsar
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: pulsar
+    ports:
+    - protocol: TCP
+      port: 6650
+    - protocol: TCP
+      port: 8080
+  # Allow to Ignite
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: ignite
+    ports:
+    - protocol: TCP
+      port: 10800
+  # Allow to Cassandra
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: cassandra
+    ports:
+    - protocol: TCP
+      port: 9042
+  # Allow to Elasticsearch
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: elasticsearch
+    ports:
+    - protocol: TCP
+      port: 9200
+  # Allow to Milvus
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: milvus
+    ports:
+    - protocol: TCP
+      port: 19530
+  # Allow to Spark
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: spark
+    ports:
+    - protocol: TCP
+      port: 7077
+  # Allow to Vault
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: vault
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow to Keycloak
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: keycloak
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow to Kubernetes API
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  # Allow to Jaeger
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: jaeger
+    ports:
+    - protocol: TCP
+      port: 14268
+  # Allow to external services (DNS)
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow to external HTTPS services (for data sources)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443 

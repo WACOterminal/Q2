@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: webappq-pdb
+  labels:
+    app: webappq
+    component: availability
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: webappq 

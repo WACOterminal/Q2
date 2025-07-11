@@ -3,17 +3,140 @@ original_prompt: "Activate the Venture Capitalist agent to seek out and execute 
 shared_context: {}
 
 tasks:
-  - task_id: "seek_and_launch_ventures"
+  - task_id: "scan_marketplace"
     type: "task"
     agent_personality: "vc_agent"
     prompt: |
-      Your mission is to generate value.
-      Begin your primary workflow:
-      1. Scan the marketplace for opportunities.
-      2. Vet the opportunities for profitability and feasibility.
-      3. Form the most efficient squad for the best opportunity.
-      4. Launch the venture and secure the gig.
-      5. Report your actions.
+      Scan external marketplaces for profitable venture opportunities.
       
-      This is a continuous, high-stakes task. The financial health of the platform is in your hands. Begin.
-    dependencies: [] 
+      Search for opportunities in:
+      1. **Freelance Platforms**: Upwork, Fiverr, Toptal for high-value projects
+      2. **API Marketplaces**: RapidAPI, Postman for data/service opportunities
+      3. **Contest Platforms**: Kaggle, DrivenData for competition prizes
+      4. **Grant Programs**: Research grants, innovation challenges
+      5. **Partnership Networks**: B2B collaboration opportunities
+      
+      Return a ranked list of opportunities with estimated value and effort.
+    dependencies: []
+
+  - task_id: "evaluate_opportunities"
+    type: "task"
+    agent_personality: "vc_agent"
+    prompt: |
+      Evaluate the discovered opportunities for strategic fit and profitability.
+      
+      Marketplace scan results:
+      {{ tasks.scan_marketplace.result }}
+      
+      For each opportunity, assess:
+      1. **Revenue Potential**: Expected earnings and payment terms
+      2. **Resource Requirements**: Computational, time, and skill needs
+      3. **Risk Assessment**: Completion probability and potential downsides
+      4. **Strategic Alignment**: Fit with platform capabilities
+      5. **Competitive Advantage**: Our unique value proposition
+      
+      Select the top 3 opportunities with detailed business cases.
+    dependencies: ["scan_marketplace"]
+
+  - task_id: "select_venture"
+    type: "conditional"
+    dependencies: ["evaluate_opportunities"]
+    branches:
+      - condition: "{{ 'high_value' in tasks.evaluate_opportunities.result|lower }}"
+        tasks:
+          - task_id: "form_execution_squad"
+            type: "task"
+            agent_personality: "vc_agent"
+            prompt: |
+              Form the optimal squad for executing the selected venture.
+              
+              Selected opportunity:
+              {{ tasks.evaluate_opportunities.result }}
+              
+              Assemble team with:
+              1. **Skill Matching**: Agents with required capabilities
+              2. **Capacity Planning**: Available bandwidth and scheduling
+              3. **Role Assignment**: Clear responsibilities and deliverables
+              4. **Success Metrics**: KPIs and quality standards
+              5. **Communication Plan**: Coordination and reporting structure
+              
+              Return squad composition and execution plan.
+            dependencies: []
+
+          - task_id: "execute_venture"
+            type: "task"
+            agent_personality: "vc_agent"
+            prompt: |
+              Launch and execute the venture with the assembled squad.
+              
+              Execution plan:
+              {{ tasks.form_execution_squad.result }}
+              
+              Coordinate execution:
+              1. **Task Delegation**: Assign specific tasks to squad members
+              2. **Progress Monitoring**: Track milestone completion
+              3. **Quality Assurance**: Ensure deliverable standards
+              4. **Client Communication**: Maintain stakeholder relationships
+              5. **Risk Mitigation**: Address issues as they arise
+              
+              Return execution status and preliminary results.
+            dependencies: ["form_execution_squad"]
+
+          - task_id: "monitor_and_optimize"
+            type: "task"
+            agent_personality: "vc_agent"
+            prompt: |
+              Monitor venture performance and optimize for maximum value.
+              
+              Execution status:
+              {{ tasks.execute_venture.result }}
+              
+              Optimize through:
+              1. **Performance Analysis**: Identify efficiency improvements
+              2. **Resource Reallocation**: Adjust squad composition if needed
+              3. **Scope Management**: Handle scope changes or expansions
+              4. **Relationship Building**: Develop repeat business opportunities
+              5. **Knowledge Capture**: Document lessons learned
+              
+              Return optimization results and venture outcomes.
+            dependencies: ["execute_venture"]
+
+      - condition: "true"
+        tasks:
+          - task_id: "market_development"
+            type: "task"
+            agent_personality: "vc_agent"
+            prompt: |
+              No high-value opportunities found. Focus on market development.
+              
+              Market analysis:
+              {{ tasks.evaluate_opportunities.result }}
+              
+              Develop new opportunities:
+              1. **Capability Building**: Identify skills to develop for better opportunities
+              2. **Market Positioning**: Improve our competitive positioning
+              3. **Network Expansion**: Build relationships in target markets
+              4. **Service Innovation**: Create new service offerings
+              5. **Portfolio Diversification**: Explore adjacent markets
+              
+              Return development plan and timeline for improved market position.
+            dependencies: []
+
+  - task_id: "generate_value_report"
+    type: "task"
+    agent_personality: "vc_agent"
+    prompt: |
+      Generate comprehensive value report for platform leadership.
+      
+      Venture results:
+      {{ tasks.select_venture.result if tasks.select_venture else 'No venture executed' }}
+      
+      Report should include:
+      1. **Financial Performance**: Revenue generated, costs, profit margins
+      2. **Operational Insights**: Efficiency metrics and learnings
+      3. **Market Intelligence**: Opportunities and competitive landscape
+      4. **Strategic Recommendations**: Future venture strategies
+      5. **Platform Improvements**: Capability gaps and enhancement needs
+      
+      Format as executive summary with actionable insights.
+    dependencies: ["select_venture"] 

@@ -1,0 +1,203 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantumpulse
+  labels:
+    app: quantumpulse
+    component: service
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: quantumpulse
+  template:
+    metadata:
+      labels:
+        app: quantumpulse
+        component: service
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+        sidecar.istio.io/inject: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "quantumpulse"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/quantumpulse"
+    spec:
+      serviceAccountName: quantumpulse
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: quantumpulse
+        image: your-registry/quantumpulse:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: api
+          containerPort: 8001
+          protocol: TCP
+        - name: admin
+          containerPort: 8002
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: quantumpulse-config
+        - secretRef:
+            name: quantumpulse-secrets
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: SERVICE_ID
+          value: "$(POD_NAME)"
+        - name: NODE_ID
+          value: "$(NODE_NAME)-$(POD_NAME)"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+            ephemeral-storage: 4Gi
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+            ephemeral-storage: 8Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 60
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: cache-volume
+          mountPath: /app/cache
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: models-volume
+          mountPath: /app/models
+        - name: inference-volume
+          mountPath: /app/inference
+        - name: quantum-volume
+          mountPath: /app/quantum
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "sleep 60"
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: cache-volume
+        emptyDir:
+          sizeLimit: 2Gi
+      - name: logs-volume
+        emptyDir: {}
+      - name: models-volume
+        emptyDir:
+          sizeLimit: 10Gi
+      - name: inference-volume
+        emptyDir:
+          sizeLimit: 5Gi
+      - name: quantum-volume
+        emptyDir:
+          sizeLimit: 1Gi
+      terminationGracePeriodSeconds: 120
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/os: linux
+        node-type: compute-optimized
+      tolerations:
+      - key: "q-platform"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      - key: "compute-optimized"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - quantumpulse
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - compute-optimized
+                - gpu-enabled 

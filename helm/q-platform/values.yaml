@@ -1,0 +1,839 @@
+# Q Platform Configuration
+global:
+  # Global image configuration
+  imageRegistry: "your-registry.com"
+  imagePullSecrets: []
+  storageClass: "fast-ssd"
+  
+  # Environment configuration
+  environment: "production"
+  domain: "q-platform.your-domain.com"
+  
+  # Security configuration
+  rbac:
+    create: true
+  podSecurityPolicy:
+    enabled: true
+  networkPolicy:
+    enabled: true
+  
+  # Monitoring configuration
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+  
+  # Tracing configuration
+  tracing:
+    enabled: true
+    jaeger:
+      endpoint: "jaeger-collector.observability.svc.cluster.local:14268"
+  
+  # TLS configuration
+  tls:
+    enabled: true
+    issuer: "letsencrypt-prod"
+
+# Q Platform Services Configuration
+services:
+  # Manager Q - Control Plane
+  managerQ:
+    enabled: true
+    replicaCount: 3
+    image:
+      repository: manager-q
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    
+    service:
+      type: ClusterIP
+      port: 8003
+      targetPort: 8003
+      annotations: {}
+    
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+        ephemeral-storage: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+        ephemeral-storage: 2Gi
+    
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 2
+    
+    persistence:
+      enabled: false
+    
+    config:
+      maxConcurrentWorkflows: 100
+      maxConcurrentTasks: 500
+      workflowTimeoutHours: 24
+      circuitBreakerFailureThreshold: 5
+      circuitBreakerRecoveryTimeout: 60
+  
+  # Agent Q - Autonomous Agents
+  agentQ:
+    enabled: true
+    
+    # Default agent deployment
+    default:
+      replicaCount: 2
+      image:
+        repository: agent-q
+        tag: "1.0.0"
+        pullPolicy: IfNotPresent
+      
+      resources:
+        requests:
+          cpu: 250m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+      
+      config:
+        personality: "default"
+        maxMemorySize: 1000
+        toolTimeout: 30
+    
+    # DevOps specialized agents
+    devops:
+      replicaCount: 2
+      image:
+        repository: agent-q
+        tag: "1.0.0"
+        pullPolicy: IfNotPresent
+      
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+      
+      config:
+        personality: "devops"
+        maxMemorySize: 2000
+        toolTimeout: 60
+    
+    # Data Analyst agents
+    dataAnalyst:
+      replicaCount: 1
+      image:
+        repository: agent-q
+        tag: "1.0.0"
+        pullPolicy: IfNotPresent
+      
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+      
+      config:
+        personality: "data-analyst"
+        maxMemorySize: 5000
+        toolTimeout: 120
+  
+  # H2M Service - Human-to-Machine Interface
+  h2mService:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: h2m-service
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    
+    service:
+      type: ClusterIP
+      port: 8002
+      targetPort: 8002
+    
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    
+    config:
+      maxConcurrentConnections: 1000
+      websocketTimeout: 300
+      ragEnabled: true
+      humanFeedbackEnabled: true
+  
+  # Quantum Pulse - LLM Inference Engine
+  quantumPulse:
+    enabled: true
+    
+    api:
+      replicaCount: 2
+      image:
+        repository: quantum-pulse-api
+        tag: "1.0.0"
+        pullPolicy: IfNotPresent
+      
+      service:
+        type: ClusterIP
+        port: 8000
+        targetPort: 8000
+      
+      resources:
+        requests:
+          cpu: 500m
+          memory: 256Mi
+        limits:
+          cpu: 1000m
+          memory: 512Mi
+    
+    workers:
+      modelA:
+        replicaCount: 2
+        image:
+          repository: quantum-pulse-worker
+          tag: "1.0.0"
+          pullPolicy: IfNotPresent
+        
+        resources:
+          requests:
+            cpu: 2000m
+            memory: 4Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+            nvidia.com/gpu: 1
+        
+        config:
+          modelName: "model-a"
+          maxBatchSize: 32
+          maxSequenceLength: 4096
+  
+  # Vector Store Q - Vector Database Service
+  vectorStoreQ:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: vector-store-q
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    
+    service:
+      type: ClusterIP
+      port: 8001
+      targetPort: 8001
+    
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+  
+  # Knowledge Graph Q - Graph Database Service
+  knowledgeGraphQ:
+    enabled: true
+    replicaCount: 1
+    image:
+      repository: knowledge-graph-q
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    
+    service:
+      type: ClusterIP
+      port: 8000
+      targetPort: 8000
+    
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    
+    persistence:
+      enabled: true
+      size: 100Gi
+      accessMode: ReadWriteOnce
+  
+  # Integration Hub - External System Connectors
+  integrationHub:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: integration-hub
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    
+    service:
+      type: ClusterIP
+      port: 8000
+      targetPort: 8000
+    
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    
+    config:
+      maxConcurrentConnections: 100
+      rateLimitPerMinute: 1000
+      connectorTimeout: 30
+  
+  # User Profile Q - User Management Service
+  userProfileQ:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: user-profile-q
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    
+    service:
+      type: ClusterIP
+      port: 8000
+      targetPort: 8000
+    
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  
+  # Web App Q - Frontend Application
+  webAppQ:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: webapp-q
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    
+    service:
+      type: ClusterIP
+      port: 80
+      targetPort: 80
+    
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+
+# Infrastructure Dependencies Configuration
+infrastructure:
+  # Apache Pulsar - Message Broker
+  pulsar:
+    enabled: true
+    initialize: true
+    broker:
+      replicaCount: 3
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+    
+    bookkeeper:
+      replicaCount: 3
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+    
+    zookeeper:
+      replicaCount: 3
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 250m
+        limits:
+          memory: 512Mi
+          cpu: 500m
+    
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+  
+  # Apache Cassandra - Database
+  cassandra:
+    enabled: true
+    cluster:
+      replicaCount: 3
+      resources:
+        requests:
+          memory: 2Gi
+          cpu: 1000m
+        limits:
+          memory: 4Gi
+          cpu: 2000m
+    
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+  
+  # Milvus - Vector Database
+  milvus:
+    enabled: true
+    cluster:
+      enabled: true
+    
+    etcd:
+      replicaCount: 3
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 250m
+        limits:
+          memory: 512Mi
+          cpu: 500m
+    
+    minio:
+      mode: distributed
+      replicas: 4
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+    
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+  
+  # Apache Ignite - In-Memory Data Grid
+  ignite:
+    enabled: true
+    replicaCount: 3
+    resources:
+      requests:
+        memory: 2Gi
+        cpu: 1000m
+      limits:
+        memory: 4Gi
+        cpu: 2000m
+    
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: "fast-ssd"
+  
+  # Elasticsearch - Search Engine
+  elasticsearch:
+    enabled: true
+    replicas: 3
+    resources:
+      requests:
+        memory: 2Gi
+        cpu: 1000m
+      limits:
+        memory: 4Gi
+        cpu: 2000m
+    
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+  
+  # MinIO - Object Storage
+  minio:
+    enabled: true
+    mode: distributed
+    replicas: 4
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+    
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+  
+  # Apache Flink - Stream Processing
+  flink:
+    enabled: true
+    jobmanager:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+    
+    taskmanager:
+      replicaCount: 3
+      resources:
+        requests:
+          memory: 2Gi
+          cpu: 1000m
+        limits:
+          memory: 4Gi
+          cpu: 2000m
+
+# Security Configuration
+security:
+  # Keycloak - Identity and Access Management
+  keycloak:
+    enabled: true
+    replicaCount: 2
+    postgresql:
+      enabled: true
+      replicaCount: 1
+    
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+    
+    ingress:
+      enabled: true
+      hostname: "auth.q-platform.your-domain.com"
+      tls: true
+  
+  # HashiCorp Vault - Secret Management
+  vault:
+    enabled: true
+    server:
+      ha:
+        enabled: true
+        replicas: 3
+      
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 250m
+        limits:
+          memory: 512Mi
+          cpu: 500m
+    
+    ui:
+      enabled: true
+    
+    ingress:
+      enabled: true
+      hostname: "vault.q-platform.your-domain.com"
+      tls: true
+  
+  # External Secrets Operator
+  external-secrets:
+    enabled: true
+    replicaCount: 2
+    
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 100m
+      limits:
+        memory: 256Mi
+        cpu: 250m
+
+# Observability Configuration
+observability:
+  # Prometheus - Metrics Collection
+  prometheus:
+    enabled: true
+    server:
+      replicaCount: 2
+      resources:
+        requests:
+          memory: 2Gi
+          cpu: 1000m
+        limits:
+          memory: 4Gi
+          cpu: 2000m
+    
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+    
+    retention: "30d"
+  
+  # Grafana - Visualization
+  grafana:
+    enabled: true
+    replicaCount: 2
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+    
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "fast-ssd"
+    
+    ingress:
+      enabled: true
+      hostname: "grafana.q-platform.your-domain.com"
+      tls: true
+  
+  # Jaeger - Distributed Tracing
+  jaeger:
+    enabled: true
+    strategy: production
+    
+    collector:
+      replicaCount: 2
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 250m
+        limits:
+          memory: 1Gi
+          cpu: 500m
+    
+    query:
+      replicaCount: 2
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 250m
+        limits:
+          memory: 512Mi
+          cpu: 500m
+    
+    ingress:
+      enabled: true
+      hostname: "jaeger.q-platform.your-domain.com"
+      tls: true
+
+# Service Mesh Configuration
+istio:
+  enabled: true
+  
+  # Istio Base
+  base:
+    enabled: true
+  
+  # Istio Control Plane
+  istiod:
+    enabled: true
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+  
+  # Istio Gateway
+  gateway:
+    enabled: true
+    replicaCount: 2
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 100m
+      limits:
+        memory: 256Mi
+        cpu: 250m
+  
+  # mTLS Configuration
+  mtls:
+    enabled: true
+    mode: STRICT
+
+# GitOps Configuration
+gitops:
+  # ArgoCD - Continuous Deployment
+  argocd:
+    enabled: true
+    controller:
+      replicaCount: 2
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+    
+    server:
+      replicaCount: 2
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 250m
+        limits:
+          memory: 512Mi
+          cpu: 500m
+    
+    ingress:
+      enabled: true
+      hostname: "argocd.q-platform.your-domain.com"
+      tls: true
+  
+  # Harbor - Container Registry
+  harbor:
+    enabled: true
+    expose:
+      type: ingress
+      ingress:
+        hosts:
+          core: "harbor.q-platform.your-domain.com"
+        tls:
+          enabled: true
+    
+    persistence:
+      enabled: true
+      resourcePolicy: "keep"
+      persistentVolumeClaim:
+        registry:
+          size: 100Gi
+          storageClass: "fast-ssd"
+        database:
+          size: 10Gi
+          storageClass: "fast-ssd"
+        redis:
+          size: 1Gi
+          storageClass: "fast-ssd"
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  
+  hosts:
+    - host: "api.q-platform.your-domain.com"
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: manager-q
+              port:
+                number: 8003
+    
+    - host: "app.q-platform.your-domain.com"
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: webapp-q
+              port:
+                number: 80
+  
+  tls:
+    - secretName: q-platform-tls
+      hosts:
+        - "api.q-platform.your-domain.com"
+        - "app.q-platform.your-domain.com"
+
+# Resource Quotas and Limits
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "50"
+    requests.memory: "100Gi"
+    limits.cpu: "100"
+    limits.memory: "200Gi"
+    persistentvolumeclaims: "50"
+    count/deployments.apps: "50"
+    count/services: "50"
+
+# Persistent Volume Claims
+persistence:
+  # Default storage class
+  storageClass: "fast-ssd"
+  
+  # Backup storage class
+  backupStorageClass: "standard"
+  
+  # Retention policies
+  retentionPolicy:
+    database: "30d"
+    logs: "7d"
+    metrics: "30d"
+    traces: "7d"
+
+# Backup Configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: "30d"
+  
+  storage:
+    provider: "s3"
+    bucket: "q-platform-backups"
+    region: "us-east-1"
+  
+  databases:
+    - cassandra
+    - postgresql
+    - milvus
+  
+  volumes:
+    - pulsar-data
+    - elasticsearch-data
+    - prometheus-data 

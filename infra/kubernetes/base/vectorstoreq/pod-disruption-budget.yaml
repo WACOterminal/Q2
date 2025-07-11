@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vectorstoreq-pdb
+  labels:
+    app: vectorstoreq
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vectorstoreq 

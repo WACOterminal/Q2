@@ -3,6 +3,7 @@ import json
 
 from agentQ.app.core.base_agent import BaseAgent
 from agentQ.app.core.insight_tool import save_insight_tool
+from agentQ.app.core.ml_tools import collect_workflow_experience_tool
 from shared.q_pulse_client.models import QPChatRequest, QPChatMessage
 
 logger = logging.getLogger(__name__)
@@ -35,15 +36,13 @@ class ReflectorAgent(BaseAgent):
         super().__init__(
             qpulse_url=qpulse_url,
             system_prompt=KNOWLEDGE_ENGINEER_SYSTEM_PROMPT,
-            tools=[save_insight_tool]
+            tools=[save_insight_tool, collect_workflow_experience_tool] # Add the new tool
         )
 
     async def run(self, workflow_json: str) -> str:
-        # For this specialized agent, we'll keep the one-shot call for simplicity,
-        # as it doesn't need a complex ReAct loop. It formulates a thought and then acts.
         workflow_data = json.loads(workflow_json)
         
-        # The agent's "thought" process is to create the prompt for the LLM.
+        # Prepare prompt for LLM to get insight
         prompt_for_llm = f"""
         Analyze the following workflow and generate the parameters for the `save_insight` tool.
         
@@ -61,14 +60,34 @@ class ReflectorAgent(BaseAgent):
         response = await self.qpulse_client.get_chat_completion(request)
         action_json_str = response.choices[0].message.content
         
+        insight_result = ""
         try:
             action_json = json.loads(action_json_str)
             if action_json.get("action") == "call_tool" and action_json.get("tool_name") == "save_insight":
                 params = action_json.get("parameters", {})
-                # Execute the tool and return its result
-                return self.toolbox.execute_tool("save_insight", **params)
+                insight_result = await self.toolbox.execute_tool("save_insight", **params)
             else:
                 raise ValueError("LLM did not return the expected 'save_insight' tool call.")
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Failed to decode or execute reflector agent action: {e}", exc_info=True)
-            return f"Error: Failed to generate and save insight. Reason: {e}" 
+            insight_result = f"Error: Failed to generate and save insight. Reason: {e}"
+        
+        # Now, collect workflow experience for RL training
+        experience_collection_result = ""
+        try:
+            # The `collect_workflow_experience_tool` expects workflow_id, agent_id, workflow_data
+            workflow_id = workflow_data.get("workflow_id", "unknown_workflow")
+            agent_id = workflow_data.get("agent_id", "reflector_agent") # Or derive from workflow
+            
+            experience_collection_result = await self.toolbox.execute_tool(
+                "collect_workflow_experience", 
+                workflow_id=workflow_id,
+                agent_id=agent_id,
+                workflow_data=workflow_data
+            )
+            logger.info(f"Collected workflow experience for RL: {experience_collection_result}")
+        except Exception as e:
+            logger.error(f"Failed to collect workflow experience for RL: {e}", exc_info=True)
+            experience_collection_result = f"Error collecting RL experience: {e}"
+            
+        return f"Insight generation result: {insight_result}\nRL Experience Collection Result: {experience_collection_result}" 

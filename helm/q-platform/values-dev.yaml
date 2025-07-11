@@ -1,0 +1,582 @@
+# Development Environment Values for Q Platform
+
+# Override global settings for development
+global:
+  environment: "development"
+  domain: "dev.q-platform.local"
+  imageRegistry: "localhost:5000"
+  
+  # Disable TLS for development
+  tls:
+    enabled: false
+    
+  # Reduce resource requirements for development
+  storageClass: "standard"
+
+# Service Configuration for Development
+services:
+  # Manager Q - Reduced resources for development
+  managerQ:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+        ephemeral-storage: 500Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+        ephemeral-storage: 1Gi
+    
+    autoscaling:
+      enabled: false
+    
+    podDisruptionBudget:
+      enabled: false
+    
+    config:
+      maxConcurrentWorkflows: 10
+      maxConcurrentTasks: 50
+      workflowTimeoutHours: 2
+      circuitBreakerFailureThreshold: 3
+      circuitBreakerRecoveryTimeout: 30
+  
+  # Agent Q - Minimal setup for development
+  agentQ:
+    enabled: true
+    
+    default:
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
+    
+    devops:
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 200m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    
+    dataAnalyst:
+      replicaCount: 0  # Disabled in development
+  
+  # H2M Service - Minimal setup
+  h2mService:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 250m
+        memory: 512Mi
+    
+    autoscaling:
+      enabled: false
+    
+    config:
+      maxConcurrentConnections: 100
+      websocketTimeout: 60
+      ragEnabled: true
+      humanFeedbackEnabled: true
+  
+  # Quantum Pulse - Minimal setup without GPU
+  quantumPulse:
+    enabled: true
+    
+    api:
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 200m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    
+    workers:
+      modelA:
+        replicaCount: 1
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        
+        config:
+          modelName: "model-a-small"
+          maxBatchSize: 8
+          maxSequenceLength: 1024
+  
+  # Vector Store Q - Minimal setup
+  vectorStoreQ:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 250m
+        memory: 512Mi
+    
+    autoscaling:
+      enabled: false
+  
+  # Knowledge Graph Q - Minimal setup
+  knowledgeGraphQ:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    
+    persistence:
+      enabled: true
+      size: 10Gi
+      accessMode: ReadWriteOnce
+  
+  # Integration Hub - Minimal setup
+  integrationHub:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    
+    config:
+      maxConcurrentConnections: 50
+      rateLimitPerMinute: 500
+      connectorTimeout: 15
+  
+  # User Profile Q - Minimal setup
+  userProfileQ:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+  
+  # Web App Q - Minimal setup
+  webAppQ:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+    
+    autoscaling:
+      enabled: false
+
+# Infrastructure Dependencies - Minimal setup for development
+infrastructure:
+  # Apache Pulsar - Single node setup
+  pulsar:
+    enabled: true
+    initialize: true
+    broker:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+          memory: 1Gi
+          cpu: 500m
+    
+    bookkeeper:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+          memory: 1Gi
+          cpu: 500m
+    
+    zookeeper:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 100m
+        limits:
+          memory: 256Mi
+          cpu: 200m
+    
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "standard"
+  
+  # Apache Cassandra - Single node setup
+  cassandra:
+    enabled: true
+    cluster:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+    
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "standard"
+  
+  # Milvus - Standalone setup
+  milvus:
+    enabled: true
+    cluster:
+      enabled: false  # Standalone mode for development
+    
+    etcd:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 100m
+        limits:
+          memory: 256Mi
+          cpu: 200m
+    
+    minio:
+      mode: standalone
+      replicas: 1
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 100m
+        limits:
+          memory: 512Mi
+          cpu: 200m
+    
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "standard"
+  
+  # Apache Ignite - Single node setup
+  ignite:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 200m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+    
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: "standard"
+  
+  # Elasticsearch - Single node setup
+  elasticsearch:
+    enabled: true
+    replicas: 1
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 200m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+    
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "standard"
+  
+  # MinIO - Single node setup
+  minio:
+    enabled: true
+    mode: standalone
+    replicas: 1
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 200m
+    
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "standard"
+  
+  # Apache Flink - Minimal setup
+  flink:
+    enabled: true
+    jobmanager:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+          memory: 1Gi
+          cpu: 500m
+    
+    taskmanager:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+
+# Security Configuration - Minimal setup for development
+security:
+  # Keycloak - Single node setup
+  keycloak:
+    enabled: true
+    replicaCount: 1
+    postgresql:
+      enabled: true
+      replicaCount: 1
+    
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 200m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+    
+    ingress:
+      enabled: true
+      hostname: "auth.dev.q-platform.local"
+      tls: false
+  
+  # HashiCorp Vault - Development mode
+  vault:
+    enabled: true
+    server:
+      dev:
+        enabled: true  # Development mode
+      ha:
+        enabled: false
+      
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 100m
+        limits:
+          memory: 256Mi
+          cpu: 200m
+    
+    ui:
+      enabled: true
+    
+    ingress:
+      enabled: true
+      hostname: "vault.dev.q-platform.local"
+      tls: false
+  
+  # External Secrets Operator - Minimal setup
+  external-secrets:
+    enabled: true
+    replicaCount: 1
+    
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 50m
+      limits:
+        memory: 128Mi
+        cpu: 100m
+
+# Observability Configuration - Minimal setup for development
+observability:
+  # Prometheus - Single node setup
+  prometheus:
+    enabled: true
+    server:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+          memory: 1Gi
+          cpu: 500m
+    
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "standard"
+    
+    retention: "7d"
+  
+  # Grafana - Single node setup
+  grafana:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 100m
+      limits:
+        memory: 256Mi
+        cpu: 200m
+    
+    persistence:
+      enabled: true
+      size: 1Gi
+      storageClass: "standard"
+    
+    ingress:
+      enabled: true
+      hostname: "grafana.dev.q-platform.local"
+      tls: false
+  
+  # Jaeger - All-in-one setup
+  jaeger:
+    enabled: true
+    strategy: allInOne
+    
+    allInOne:
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 100m
+        limits:
+          memory: 512Mi
+          cpu: 200m
+    
+    ingress:
+      enabled: true
+      hostname: "jaeger.dev.q-platform.local"
+      tls: false
+
+# Service Mesh Configuration - Disabled for development
+istio:
+  enabled: false
+
+# GitOps Configuration - Minimal setup for development
+gitops:
+  # ArgoCD - Single node setup
+  argocd:
+    enabled: true
+    controller:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+          memory: 1Gi
+          cpu: 500m
+    
+    server:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 100m
+        limits:
+          memory: 256Mi
+          cpu: 200m
+    
+    ingress:
+      enabled: true
+      hostname: "argocd.dev.q-platform.local"
+      tls: false
+  
+  # Harbor - Disabled for development
+  harbor:
+    enabled: false
+
+# Ingress Configuration - HTTP only for development
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  
+  hosts:
+    - host: "api.dev.q-platform.local"
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: manager-q
+              port:
+                number: 8003
+    
+    - host: "app.dev.q-platform.local"
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: webapp-q
+              port:
+                number: 80
+  
+  tls: []
+
+# Resource Quotas and Limits - Reduced for development
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "10"
+    requests.memory: "20Gi"
+    limits.cpu: "20"
+    limits.memory: "40Gi"
+    persistentvolumeclaims: "20"
+    count/deployments.apps: "20"
+    count/services: "20"
+
+# Persistent Volume Claims - Reduced sizes for development
+persistence:
+  storageClass: "standard"
+  backupStorageClass: "standard"
+  
+  retentionPolicy:
+    database: "7d"
+    logs: "2d"
+    metrics: "7d"
+    traces: "2d"
+
+# Backup Configuration - Disabled for development
+backup:
+  enabled: false 

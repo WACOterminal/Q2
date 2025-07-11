@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: h2m-config
+  labels:
+    app: h2m
+    component: config
+data:
+  # Application Configuration
+  SERVICE_NAME: "h2m"
+  SERVICE_VERSION: "1.0.0"
+  LOG_LEVEL: "INFO"
+  METRICS_PORT: "9091"
+  
+  # Network Configuration
+  HOST: "0.0.0.0"
+  PORT: "8008"
+  
+  # Human-to-Machine Configuration
+  INTERFACE_TYPE: "api"
+  ENABLE_WEBSOCKET: "true"
+  WEBSOCKET_PORT: "8009"
+  MAX_CONNECTIONS: "1000"
+  CONNECTION_TIMEOUT: "300"
+  
+  # Authentication & Authorization
+  AUTH_ENABLED: "true"
+  SESSION_TIMEOUT: "3600"
+  TOKEN_EXPIRY: "86400"
+  REFRESH_TOKEN_EXPIRY: "604800"
+  
+  # Pulsar Configuration
+  PULSAR_SERVICE_URL: "pulsar://pulsar-broker:6650"
+  PULSAR_ADMIN_URL: "http://pulsar-admin:8080"
+  HUMAN_REQUESTS_TOPIC: "persistent://public/default/q.h2m.requests"
+  HUMAN_RESPONSES_TOPIC: "persistent://public/default/q.h2m.responses"
+  AGENT_COMMUNICATION_TOPIC: "persistent://public/default/q.h2m.agent-comm"
+  
+  # Health Check Configuration
+  HEALTH_CHECK_PATH: "/health"
+  HEALTH_CHECK_PORT: "8008"
+  
+  # Observability
+  ENABLE_TRACING: "true"
+  ENABLE_METRICS: "true"
+  ENABLE_PROMETHEUS: "true"
+  
+  # Database Configuration
+  DATABASE_URL: "postgresql://postgres:5432/h2m"
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_CONNECTIONS: "100"
+  
+  # Session Management
+  SESSION_STORE: "redis"
+  SESSION_REDIS_URL: "redis://redis:6379"
+  SESSION_PREFIX: "h2m:session:"
+  
+  # Message Queue Configuration
+  QUEUE_TYPE: "pulsar"
+  QUEUE_BATCH_SIZE: "100"
+  QUEUE_MAX_RETRY: "3"
+  QUEUE_RETRY_DELAY: "1000"
+  
+  # File Upload Configuration
+  UPLOAD_ENABLED: "true"
+  UPLOAD_MAX_SIZE: "100MB"
+  UPLOAD_ALLOWED_TYPES: "pdf,doc,docx,txt,csv,xlsx,png,jpg,jpeg,gif"
+  UPLOAD_STORAGE: "minio"
+  
+  # API Configuration
+  API_RATE_LIMIT: "1000"
+  API_RATE_WINDOW: "60"
+  API_CORS_ENABLED: "true"
+  API_CORS_ORIGINS: "*"
+  
+  # Integration Configuration
+  AGENTQ_URL: "http://agentq-default:8000"
+  MANAGERQ_URL: "http://manager-q:8003"
+  VECTORSTORE_URL: "http://vectorstore-q:8001"
+  KNOWLEDGEGRAPH_URL: "http://knowledgegraphq:8000"
+  
+  # Notification Configuration
+  NOTIFICATIONS_ENABLED: "true"
+  EMAIL_ENABLED: "true"
+  SLACK_ENABLED: "true"
+  WEBHOOK_ENABLED: "true"
+  
+  # UI Configuration
+  UI_ENABLED: "true"
+  UI_THEME: "dark"
+  UI_LANGUAGE: "en"
+  UI_TIMEZONE: "UTC"
+  
+  # Performance Configuration
+  WORKER_PROCESSES: "4"
+  WORKER_THREADS: "2"
+  REQUEST_TIMEOUT: "300"
+  RESPONSE_TIMEOUT: "300"
+  
+  # Security Configuration
+  SECURITY_HEADERS_ENABLED: "true"
+  CSRF_PROTECTION: "true"
+  XSS_PROTECTION: "true"
+  CONTENT_TYPE_NOSNIFF: "true"
+  
+  # Logging Configuration
+  LOG_FORMAT: "json"
+  LOG_TO_PULSAR: "true"
+  LOG_PULSAR_TOPIC: "persistent://public/default/h2m-logs"
+  
+  # Environment
+  ENVIRONMENT: "production"
+  
+  # Cache Configuration
+  CACHE_ENABLED: "true"
+  CACHE_TYPE: "redis"
+  CACHE_TTL: "3600"
+  CACHE_MAX_SIZE: "100MB"
+  
+  # Workflow Integration
+  WORKFLOW_ENABLED: "true"
+  WORKFLOW_EXECUTION_TIMEOUT: "1800"
+  WORKFLOW_MAX_CONCURRENT: "10"
+  
+  # Human Feedback Configuration
+  FEEDBACK_ENABLED: "true"
+  FEEDBACK_STORAGE: "database"
+  FEEDBACK_ANALYTICS: "true"
+  
+  # Multi-language Support
+  I18N_ENABLED: "true"
+  SUPPORTED_LANGUAGES: "en,es,fr,de,zh,ja"
+  DEFAULT_LANGUAGE: "en" 
