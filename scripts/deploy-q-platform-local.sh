@@ -50,16 +50,16 @@ prepare_service() {
     
     echo "🔧 Preparing $service_name..."
     
-    # Create shared directory symlink if it doesn't exist
-    if [ ! -d "$service_dir/shared" ] && [ -d "shared" ]; then
-        echo "   Creating shared directory link..."
-        ln -sf "$(pwd)/shared" "$service_dir/shared"
-    fi
-    
     # Check if Dockerfile exists
     if [ ! -f "$service_dir/Dockerfile" ]; then
         echo "   ⚠️  No Dockerfile found for $service_name, skipping..."
         return 1
+    fi
+    
+    # Copy shared directory if it doesn't exist in the service directory
+    if [ ! -d "$service_dir/shared" ] && [ -d "shared" ]; then
+        echo "   Copying shared directory..."
+        cp -r shared "$service_dir/shared"
     fi
     
     return 0
@@ -69,9 +69,10 @@ prepare_service() {
 cleanup_service() {
     local service_dir="$1"
     
-    # Remove symlink if it exists
-    if [ -L "$service_dir/shared" ]; then
-        rm "$service_dir/shared"
+    # Remove copied shared directory if it exists
+    if [ -d "$service_dir/shared" ]; then
+        echo "   Cleaning up shared directory..."
+        rm -rf "$service_dir/shared"
     fi
 }
 
