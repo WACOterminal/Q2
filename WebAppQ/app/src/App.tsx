@@ -10,6 +10,7 @@ import GraphIcon from '@mui/icons-material/DataObject'; // Using DataObject for 
 import CodeIcon from '@mui/icons-material/Code'; // Using Code for Agent Sandbox
 import PolicyIcon from '@mui/icons-material/Policy'; // For Governance
 import QueryStatsIcon from '@mui/icons-material/QueryStats'; // For MLOps Dashboard
+import PeopleIcon from '@mui/icons-material/People'; // For Human-Agent Teaming
 import AuthContext from './AuthContext';
 import Chat from './pages/Chat';
 import Home from './pages/Home';
@@ -18,6 +19,7 @@ import KnowledgeGraph from './pages/KnowledgeGraph';
 import AgentSandbox from './pages/AgentSandbox';
 import Governance from './pages/Governance';
 import MLDashboard from './pages/MLDashboard'; // Import the new MLDashboard component
+import HumanAgentTeaming from './pages/HumanAgentTeaming'; // Import the new Human-Agent Teaming component
 
 const drawerWidth = 240;
 
@@ -35,6 +37,7 @@ const navItems: NavItem[] = [
   { text: 'Agent Sandbox', icon: <CodeIcon />, path: '/agent-sandbox' },
   { text: 'Governance', icon: <PolicyIcon />, path: '/governance' },
   { text: 'MLOps Dashboard', icon: <QueryStatsIcon />, path: '/mlops-dashboard' }, // Add MLOps Dashboard link
+  { text: 'Human-Agent Teaming', icon: <PeopleIcon />, path: '/human-agent-teaming' }, // Add Human-Agent Teaming link
 ];
 
 const App: React.FC = () => {
@@ -163,6 +166,7 @@ const App: React.FC = () => {
           <Route path="/agent-sandbox" element={authenticated ? <AgentSandbox /> : <Typography>Please login to access the agent sandbox.</Typography>} />
           <Route path="/governance" element={authenticated ? <Governance /> : <Typography>Please login to access governance.</Typography>} />
           <Route path="/mlops-dashboard" element={authenticated ? <MLDashboard /> : <Typography>Please login to access the MLOps Dashboard.</Typography>} /> {/* Add MLDashboard route */}
+          <Route path="/human-agent-teaming" element={authenticated ? <HumanAgentTeaming /> : <Typography>Please login to access Human-Agent Teaming.</Typography>} /> {/* Add Human-Agent Teaming route */}
           {/* Add other routes here */}
         </Routes>
       </Box>

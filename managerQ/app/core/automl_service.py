@@ -55,6 +55,7 @@ from shared.pulsar_client import shared_pulsar_client
 from shared.q_vectorstore_client.client import VectorStoreClient
 from shared.q_knowledgegraph_client.client import KnowledgeGraphClient
 from shared.vault_client import VaultClient
+from .model_registry_service import ModelRegistryService
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,9 @@ class AutoMLService:
         # Active experiments
         self.active_experiments: Dict[str, AutoMLExperiment] = {}
         self.experiment_results: Dict[str, List[ModelCandidate]] = defaultdict(list)
+        
+        # Model registry integration
+        self.model_registry_service = ModelRegistryService()
         
         # Model registry
         self.model_registry: Dict[str, Dict[str, Any]] = {}
@@ -435,6 +439,14 @@ class AutoMLService:
                 # Save best model
                 model_path = self.model_storage_path / f"{model_candidate.model_id}.pkl"
                 joblib.dump(model, model_path)
+                
+                # Register model in registry
+                await self._register_model_with_registry(
+                    model_candidate, 
+                    str(model_path), 
+                    experiment.experiment_name,
+                    "sklearn"
+                )
             
             # Log to MLflow
             with mlflow.start_run():
@@ -552,6 +564,14 @@ class AutoMLService:
                 # Save best model
                 model_path = self.model_storage_path / f"{model_candidate.model_id}.pth"
                 torch.save(trained_model.state_dict(), model_path)
+                
+                # Register model in registry
+                await self._register_model_with_registry(
+                    model_candidate, 
+                    str(model_path), 
+                    experiment.experiment_name,
+                    "pytorch"
+                )
             
             # Log to MLflow
             with mlflow.start_run():
@@ -998,6 +1018,59 @@ class AutoMLService:
             except Exception as e:
                 logger.error(f"Error in performance tracking: {e}")
                 await asyncio.sleep(300)
+    
+    async def _register_model_with_registry(
+        self,
+        model_candidate: ModelCandidate,
+        artifact_path: str,
+        experiment_name: str,
+        model_framework: str
+    ):
+        """Register model with the central model registry"""
+        
+        try:
+            # Create model metadata
+            model_metadata = {
+                "model_name": f"{experiment_name}_{model_candidate.model_name}",
+                "model_type": model_candidate.model_type,
+                "framework": model_framework,
+                "hyperparameters": model_candidate.hyperparameters,
+                "performance_metrics": model_candidate.performance_metrics,
+                "training_time": model_candidate.training_time,
+                "model_size": model_candidate.model_size,
+                "feature_importance": model_candidate.feature_importance,
+                "cross_validation_scores": model_candidate.cross_validation_scores,
+                "experiment_id": model_candidate.experiment_id,
+                "created_at": model_candidate.created_at.isoformat() if model_candidate.created_at else None
+            }
+            
+            # Register with model registry service
+            version_id = await self.model_registry_service.register_model(
+                model_name=f"{experiment_name}_{model_candidate.model_name}",
+                version=f"v_{model_candidate.model_id}",
+                artifact_path=artifact_path,
+                metadata=model_metadata,
+                tags=["automl", model_candidate.model_type, model_framework]
+            )
+            
+            logger.info(f"Registered model {model_candidate.model_id} with registry: {version_id}")
+            
+            # Publish model registration event
+            await shared_pulsar_client.publish(
+                "q.ml.automl.model.registered",
+                {
+                    "model_id": model_candidate.model_id,
+                    "model_name": f"{experiment_name}_{model_candidate.model_name}",
+                    "version_id": version_id,
+                    "artifact_path": artifact_path,
+                    "performance_score": model_candidate.performance_metrics.get("test_score", 0),
+                    "experiment_id": model_candidate.experiment_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to register model {model_candidate.model_id}: {e}")
     
     # ===== PUBLIC API METHODS =====
     
