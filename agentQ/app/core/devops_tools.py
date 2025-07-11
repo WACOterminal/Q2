@@ -4,11 +4,12 @@ import json
 from datetime import datetime, timedelta
 from elasticsearch import Elasticsearch
 from kubernetes import client, config
+import structlog
 
 from agentQ.app.core.toolbox import Tool
 from shared.q_knowledgegraph_client import kgq_client
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # --- Elasticsearch Client Setup ---
 ES_URL = os.getenv("ELASTICSEARCH_URL", "http://elasticsearch:9200")
@@ -445,3 +446,78 @@ scale_deployment_tool = Tool(
     description="Scales a Kubernetes deployment to a specific number of replicas.",
     func=scale_deployment
 ) 
+
+# --- Kubernetes Tools ---
+try:
+    # Try to load in-cluster config first
+    config.load_incluster_config()
+except config.ConfigException:
+    # Fallback to kube-config for local development
+    try:
+        config.load_kube_config()
+    except config.ConfigException:
+        logger.warning("Could not load any Kubernetes configuration. K8s tools will not be available.")
+        # Handle the case where no config is found
+        # You might want to disable the tools or use a mock client
+
+v1 = client.CoreV1Api()
+apps_v1 = client.AppsV1Api()
+
+def kubernetes_get_events(service_name: str, namespace: str, config: dict = None) -> str:
+    """
+    Fetches Kubernetes events for pods associated with a given service.
+    
+    Args:
+        service_name (str): The name of the service to get events for.
+        namespace (str): The namespace of the service.
+    
+    Returns:
+        str: A JSON string of the events, or an error message.
+    """
+    logger.info("Fetching K8s events", service=service_name, namespace=namespace)
+    try:
+        # First, get the service to find its selector
+        service = v1.read_namespaced_service(name=service_name, namespace=namespace)
+        selector = service.spec.selector
+        if not selector:
+            return f"Error: No selector found for service '{service_name}'."
+            
+        label_selector = ",".join([f"{k}={v}" for k, v in selector.items()])
+        
+        # Then, get pods matching the selector
+        pods = v1.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
+        
+        all_events = []
+        for pod in pods.items:
+            field_selector = f"involvedObject.name={pod.metadata.name},involvedObject.namespace={namespace}"
+            events = v1.list_namespaced_event(namespace=namespace, field_selector=field_selector)
+            all_events.extend(events.items)
+            
+        # Serialize events to a list of dicts
+        event_list = [event.to_dict() for event in all_events]
+        # Sort by last timestamp
+        event_list.sort(key=lambda x: x.get('last_timestamp'), reverse=True)
+        
+        return json.dumps(event_list, default=str) # Use default=str for datetime objects
+
+    except client.ApiException as e:
+        logger.error("Kubernetes API error", error=str(e))
+        return f"Error: Kubernetes API error: {e.body}"
+    except Exception as e:
+        logger.error("Unexpected error fetching K8s events", exc_info=True)
+        return f"Error: An unexpected error occurred: {e}"
+
+
+k8s_get_events_tool = Tool(
+    name="kubernetes_get_events",
+    description="Fetches recent Kubernetes events for a specific service in a namespace.",
+    func=kubernetes_get_events
+)
+
+# Add the new tool to the list of devops tools
+devops_tools = [
+    k8s_get_deployments_tool,
+    k8s_get_pods_tool,
+    k8s_restart_deployment_tool,
+    k8s_get_events_tool
+] 

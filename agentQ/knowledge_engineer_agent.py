@@ -5,7 +5,9 @@ import asyncio
 
 from agentQ.app.core.toolbox import Toolbox, Tool
 from agentQ.app.core.context import ContextManager
-from agentQ.app.core.knowledgegraph_tool import knowledgegraph_tool # To write to the graph
+from agentQ.app.core.knowledgegraph_tool import knowledgegraph_tool
+from agentQ.app.core.vectorstore_tool import vectorstore_tool
+from agentQ.app.core.http_tool import http_get_tool
 
 logger = structlog.get_logger("knowledge_engineer_agent")
 
@@ -14,22 +16,28 @@ AGENT_ID = "knowledge-engineer-agent-01"
 TASK_TOPIC = f"persistent://public/default/q.agentq.tasks.{AGENT_ID}"
 
 KNOWLEDGE_ENGINEER_SYSTEM_PROMPT = """
-You are a Knowledge Engineer AI. Your sole purpose is to enrich the platform's Knowledge Graph by extracting structured information from unstructured documents.
+You are a Knowledge Engineer AI. Your purpose is to enrich the platform's knowledge base by processing and ingesting information from various sources.
 
-**Your Workflow:**
-1.  Use the `get_unprocessed_documents` tool to fetch a batch of recently added text documents.
-2.  For each document, carefully read the text and identify key entities. Entities can be:
-    -   **Services**: (e.g., 'QuantumPulse', 'managerQ', 'VectorStoreQ')
-    -   **Technologies**: (e.g., 'Kubernetes', 'Pulsar', 'React', 'FastAPI')
-    -   **Concepts**: (e.g., 'RAG', 'multi-agent system', 'fine-tuning')
-3.  For each document, generate a series of `upsert_vertex` and `upsert_edge` operations using the `knowledgegraph_tool` to represent the relationships you found. For example, if a document mentions that 'H2M uses VectorStoreQ', you would create an edge `('H2M', 'USES', 'VectorStoreQ')`.
-4.  Once you have processed all documents in the batch, use the `finish` action with a summary of the entities and relationships you added.
+**Primary Workflows:**
 
-This is an automated, ongoing task. Begin.
+1.  **Live Web Ingestion (Manual Trigger):**
+    -   This workflow is triggered when a user provides a URL.
+    -   You will be given a prompt containing the `source_url`.
+    -   **Step 1 (Fetch):** Use the `http_get` tool to retrieve the content from the `source_url`.
+    -   **Step 2 (Process & Chunk):** The result will be HTML. Extract the main textual content (paragraphs, headings) and split it into meaningful chunks.
+    -   **Step 3 (Ingest):** For each chunk, use both `knowledgegraph_add_chunk` and `vectorstore_upsert` tools to save it to the knowledge graph and vector store respectively.
+
+2.  **Batch Document Processing (Automated Task):**
+    -   If not given a specific ingestion prompt, your default task is to process documents from the backlog.
+    -   Use `get_unprocessed_documents` to fetch a batch.
+    -   For each document, identify key entities and relationships.
+    -   Use `upsert_vertex` and `upsert_edge` operations to add them to the knowledge graph.
+
+Always prioritize the manually triggered workflow if a `source_url` is present in the context.
 """
 
 # --- Tools for the Knowledge Engineer ---
-
+# (get_unprocessed_documents tool definition remains the same)
 def get_unprocessed_documents(config: dict) -> str:
     """
     Retrieves a batch of unprocessed documents from the vector store.
@@ -61,6 +69,7 @@ unprocessed_docs_tool = Tool(
     func=get_unprocessed_documents
 )
 
+
 def setup_knowledge_engineer_agent(config: dict):
     """
     Initializes the toolbox and context manager for the Knowledge Engineer agent.
@@ -68,8 +77,12 @@ def setup_knowledge_engineer_agent(config: dict):
     logger.info("Setting up Knowledge Engineer Agent", agent_id=AGENT_ID)
     
     toolbox = Toolbox()
+    
+    # Register all necessary tools
     toolbox.register_tool(unprocessed_docs_tool)
-    toolbox.register_tool(knowledgegraph_tool) # To write the final graph
+    toolbox.register_tool(knowledgegraph_tool)
+    toolbox.register_tool(vectorstore_tool)
+    toolbox.register_tool(http_get_tool)
     
     context_manager = ContextManager(ignite_addresses=config['ignite']['addresses'], agent_id=AGENT_ID)
     context_manager.connect()

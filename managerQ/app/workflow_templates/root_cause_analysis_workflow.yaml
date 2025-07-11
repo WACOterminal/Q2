@@ -1,72 +1,60 @@
-# managerQ/app/workflow_templates/root_cause_analysis_workflow.yaml
-original_prompt: "Root cause analysis for anomaly in service: {{ service_name }}"
+workflow_id: "wf_root_cause_analysis"
+original_prompt: "A service is exhibiting anomalous behavior. Perform a root cause analysis by gathering and correlating metrics, logs, and events."
 shared_context:
-  service_name: "{{ service_name }}"
-  original_event_payload: "{{ original_event_payload }}"
+  # These values will be injected by the goal that triggers the workflow
+  service_name: "unknown-service"
+  namespace: "q-platform"
+  time_window_minutes: "15"
+
 tasks:
-  - task_id: "investigate_infra"
+  - task_id: "gather_metrics"
     type: "task"
-    agent_personality: "devops_agent"
-    prompt: >
-      An error rate anomaly has been detected in the '{{ service_name }}' service.
-      Investigate the current state of the Kubernetes deployment for this service.
-      Check the pod statuses, recent events, and resource utilization (CPU/memory).
-      Your goal is to identify any infrastructure-level issues like pod crashes,
-      resource throttling, or deployment errors.
-      The original event payload is: {{ original_event_payload }}
+    agent_personality: "devops"
+    prompt: |
+      The service '{{ shared_context.service_name }}' in namespace '{{ shared_context.namespace }}' is showing anomalies.
+      Query Prometheus for the following key metrics over the last {{ shared_context.time_window_minutes }} minutes:
+      - CPU Utilization (container_cpu_usage_seconds_total)
+      - Memory Usage (container_memory_working_set_bytes)
+      - Restart Count (kube_pod_container_status_restarts_total)
+      - Network I/O (container_network_receive_bytes_total, container_network_transmit_bytes_total)
+      
+      Use the `prometheus_query_range` tool for each metric.
     dependencies: []
-  
-  - task_id: "analyze_logs"
-    type: "task"
-    agent_personality: "data_analyst_agent"
-    prompt: >
-      Following an infrastructure check, analyze the centralized logs for the
-      '{{ service_name }}' service around the time of the anomaly.
-      The infrastructure investigation returned: {{ tasks.investigate_infra.result }}
-      Look for spikes in error messages, specific exception stack traces, or any
-      unusual log patterns that could pinpoint the root cause of the error rate increase.
-      Query logs in a 15-minute window around the event time.
-    dependencies:
-      - "investigate_infra"
 
-  - task_id: "synthesize_report"
+  - task_id: "gather_logs"
     type: "task"
-    agent_personality: "reflector_agent"
-    prompt: >
-      Synthesize the findings from the infrastructure investigation and log analysis
-      into a final root cause analysis report.
+    agent_personality: "data_analyst"
+    prompt: |
+      The service '{{ shared_context.service_name }}' in namespace '{{ shared_context.namespace }}' is showing anomalies.
+      Query Elasticsearch for logs from this service over the last {{ shared_context.time_window_minutes }} minutes.
+      Search for logs with levels ERROR, CRITICAL, or FATAL. Also, search for any occurrences of the phrase 'OOMKilled' or 'CrashLoopBackOff'.
       
-      Infrastructure Findings:
-      {{ tasks.investigate_infra.result }}
+      Use the `elasticsearch_query` tool.
+    dependencies: []
+
+  - task_id: "gather_k8s_events"
+    type: "task"
+    agent_personality: "devops"
+    prompt: |
+      The service '{{ shared_context.service_name }}' in namespace '{{ shared_context.namespace }}' is showing anomalies.
+      Use the `kubernetes_get_events` tool to fetch all events related to this service from the last {{ shared_context.time_window_minutes }} minutes.
+      Pay special attention to events with a 'Warning' type.
+    dependencies: []
+
+  - task_id: "synthesize_findings"
+    type: "task"
+    agent_personality: "reflector"
+    prompt: |
+      You have been provided with data from three sources for the service '{{ shared_context.service_name }}':
+      1. **Metrics**: {{ tasks.gather_metrics.result }}
+      2. **Logs**: {{ tasks.gather_logs.result }}
+      3. **Kubernetes Events**: {{ tasks.gather_k8s_events.result }}
+
+      Analyze and correlate all of this information to determine the probable root cause of the issue.
+      Your analysis should be structured with the following sections:
+      - **Summary**: A one-sentence summary of the probable root cause.
+      - **Evidence**: A bulleted list of the key findings from metrics, logs, and events that support your conclusion.
+      - **Recommendation**: A suggested next step for remediation.
       
-      Log Analysis Findings:
-      {{ tasks.analyze_logs.result }}
-
-      Provide a concise summary of the likely root cause and suggest a potential
-      remediation step, such as 'restart_service'. Structure your output as a markdown report.
-    dependencies:
-      - "analyze_logs"
-
-  - task_id: "request_remediation_approval"
-    type: "approval"
-    message: >
-      The AIOps agent recommends restarting the '{{ service_name }}' service. If that fails, the next step is to scale up the deployment. Please approve or reject this plan.
-    dependencies:
-      - "synthesize_report"
-    required_roles: ["sre", "lead_dev"]
-
-  - task_id: "remediate_issue_restart"
-    type: "task"
-    agent_personality: "devops_agent"
-    prompt: "Execute the 'restart_service' tool for '{{ service_name }}'."
-    dependencies:
-      - "request_remediation_approval"
-    condition: "{{ tasks.request_remediation_approval.result == 'approved' }}"
-
-  - task_id: "remediate_issue_scale"
-    type: "task"
-    agent_personality: "devops_agent"
-    prompt: "The restart failed. As per the approved plan, execute the 'scale_deployment' tool for '{{ service_name }}' to 3 replicas."
-    dependencies:
-      - "remediate_issue_restart"
-    condition: "{{ tasks.remediate_issue_restart.status == 'FAILED' }}" 
+      Present the final report as a clean, well-formatted markdown document.
+    dependencies: ["gather_metrics", "gather_logs", "gather_k8s_events"] 

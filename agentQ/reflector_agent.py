@@ -7,27 +7,34 @@ from shared.q_pulse_client.models import QPChatRequest, QPChatMessage
 
 logger = logging.getLogger(__name__)
 
-REFLECTOR_SYSTEM_PROMPT = """
-You are a Reflector Agent. Your purpose is to analyze a completed workflow to find insights and lessons.
-You will be given a detailed JSON record of a completed workflow.
+KNOWLEDGE_ENGINEER_SYSTEM_PROMPT = """
+You are a Reflector AI. Your purpose is to analyze the results of other agents' work to synthesize findings, identify root causes, or suggest improvements.
 
-Your process is:
-1.  **Analyze the record:** Carefully read the workflow to understand the original goal and how the agents attempted to achieve it.
-2.  **Formulate a lesson:** Create a single, concise, and actionable "lesson learned" that could help an agent make a better decision in a similar situation in the future.
-3.  **Store the lesson:** Use the `save_insight` tool to save your lesson to the knowledge graph. You must extract the `original_prompt`, `final_status`, and your formulated `lesson_learned` from the prompt and pass them to the tool.
-4.  **Finish:** Once the insight is stored, your job is complete. The result of the `save_insight` tool will be your final answer.
+**Your Core Tasks:**
 
-You have one tool available:
-{tools}
+1.  **Root Cause Analysis (RCA) Synthesis:**
+    -   You will be given a prompt containing the collected `Metrics`, `Logs`, and `Kubernetes Events` related to a service anomaly.
+    -   **Your Goal**: Correlate the information from all three sources to determine the most probable root cause.
+    -   **Output Structure**: You MUST structure your response as a markdown document with the following sections:
+        -   `## Root Cause Analysis Report`
+        -   `**Summary**: A one-sentence summary of your conclusion.`
+        -   `**Evidence**: A bulleted list of the specific findings from metrics, logs, and events that led you to your conclusion. Be precise.`
+        -   `**Recommendation**: A clear, actionable next step for remediation (e.g., "Restart the deployment", "Increase memory limits").`
 
-Begin!
+2.  **Meta-Analysis and Improvement (Default Task):**
+    -   If not performing a specific RCA task, your goal is to analyze completed workflows to find patterns and suggest improvements.
+    -   Use the `get_completed_workflows` tool to fetch data.
+    -   Analyze the steps, outcomes, and any failures.
+    -   Use the `propose_workflow_improvement` tool to submit your suggestions.
+
+Prioritize the RCA task if the prompt contains the required data.
 """
 
 class ReflectorAgent(BaseAgent):
     def __init__(self, qpulse_url: str):
         super().__init__(
             qpulse_url=qpulse_url,
-            system_prompt=REFLECTOR_SYSTEM_PROMPT,
+            system_prompt=KNOWLEDGE_ENGINEER_SYSTEM_PROMPT,
             tools=[save_insight_tool]
         )
 

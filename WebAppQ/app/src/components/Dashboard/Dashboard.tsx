@@ -3,6 +3,12 @@ import { AuthContext } from '../../AuthContext';
 import './Dashboard.css';
 import WorkflowVisualizer from '../WorkflowVisualizer/WorkflowVisualizer';
 import { useSearchParams } from 'react-router-dom';
+import { Grid, Paper } from '@mui/material';
+import { ActiveWorkflowsWidget } from './ActiveWorkflowsWidget';
+import { AgentPerformanceWidget } from './AgentPerformanceWidget';
+import { WorkflowAnalyticsWidget } from './WorkflowAnalyticsWidget';
+import { ModelTestsWidget } from './ModelTestsWidget';
+import { RCAReportsWidget } from './RCAReportsWidget';
 
 interface Anomaly {
     id: string;
@@ -116,32 +122,28 @@ export const Dashboard: React.FC = () => {
             <div className={`connection-status ${connectionStatus.toLowerCase()}`}>
                 Dashboard Status: {connectionStatus}
             </div>
-            <div className="anomaly-list-panel">
-                <h2>Active Anomalies</h2>
-                <ul>
-                    {Object.values(anomalies).map(anom => (
-                        <li key={anom.id} onClick={() => setSelectedAnomalyId(anom.id)}>
-                            <strong>{anom.service_name}</strong>
-                            <p>{anom.message}</p>
-                            <small>{new Date(anom.timestamp).toLocaleString()}</small>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-            <div className="workflow-detail-panel">
-                <h2>Investigation Details</h2>
-                {selectedAnomaly ? (
-                    <div>
-                        <h3>{selectedAnomaly.service_name}</h3>
-                        <p>{selectedAnomaly.message}</p>
-                        {selectedAnomaly.workflow_id && (
-                            <WorkflowVisualizer workflowId={selectedAnomaly.workflow_id} />
-                        )}
-                    </div>
-                ) : (
-                    <p>Select an anomaly to view details.</p>
-                )}
-            </div>
+            <Grid container spacing={3}>
+                {/* First Row */}
+                <Grid item xs={12} md={8}>
+                    <ActiveWorkflowsWidget />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <AgentPerformanceWidget />
+                </Grid>
+
+                {/* Second Row: RCA Reports */}
+                <Grid item xs={12}>
+                    <RCAReportsWidget />
+                </Grid>
+
+                {/* Third Row */}
+                <Grid item xs={12} md={6}>
+                    <WorkflowAnalyticsWidget />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                    <ModelTestsWidget />
+                </Grid>
+            </Grid>
         </div>
     );
 }; 

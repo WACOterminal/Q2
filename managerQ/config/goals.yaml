@@ -9,7 +9,12 @@
       value: 80
       duration_minutes: 5
   # This workflow must be pre-loaded into the Ignite 'workflows' cache
-  remediation_workflow_id: "wf_auto_scale_service"
+  remediation_workflow_id: "wf_root_cause_analysis"
+  context_overrides:
+    # The 'failed_condition' object is automatically injected by the GoalMonitor
+    # when a condition is met. We map the service name from that object into
+    # the context of the RCA workflow.
+    service_name: "{{ failed_condition.service }}"
 
 - goal_id: "goal_fix_scenario_typo_on_startup"
   objective: "Correct the generic objective in the proactive scaling scenario to be more specific."

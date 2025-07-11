@@ -5,7 +5,9 @@ import structlog
 
 from agentQ.app.core.toolbox import Toolbox, Tool
 from agentQ.app.core.context import ContextManager
-from agentQ.app.core.spark_tool import submit_spark_job_tool
+from agentQ.app.core.database_tool import query_tool
+from agentQ.app.core.spark_tool import spark_tool
+from agentQ.app.core.elasticsearch_tool import elasticsearch_tool
 from agentQ.app.core.data_analyst_tools import execute_sql_query_tool, generate_visualization_tool
 from agentQ.app.core.vectorstore_tool import vectorstore_tool # Can use memory to find past analyses
 from agentQ.app.core.meta_tools import list_tools_tool

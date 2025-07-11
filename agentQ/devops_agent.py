@@ -19,6 +19,7 @@ from agentQ.app.core.code_search_tool import code_search_tool
 from agentQ.app.core.reporting_tool import log_incident_report_tool
 from agentQ.app.core.git_tool import propose_code_fix_tool
 from agentQ.app.core.delegation_tool import delegation_tool
+from agentQ.app.core.prometheus_tool import prometheus_tool
 from shared.vault_client import VaultClient
 
 logger = structlog.get_logger("devops_agent")
@@ -87,6 +88,7 @@ def setup_devops_agent(config: dict, vault_client: VaultClient):
     devops_toolbox.register_tool(update_context_tool)
     devops_toolbox.register_tool(Tool(name=code_search_tool.name, description=code_search_tool.description, func=code_search_tool.func, config=tool_config))
     devops_toolbox.register_tool(Tool(name=propose_code_fix_tool.name, description=propose_code_fix_tool.description, func=propose_code_fix_tool.func, config=tool_config))
+    devops_toolbox.register_tool(prometheus_tool)
     
     # Context can be shared or agent-specific
     context_manager = ContextManager(ignite_addresses=config['ignite']['addresses'], agent_id=AGENT_ID)
