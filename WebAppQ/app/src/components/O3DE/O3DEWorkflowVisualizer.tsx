@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, CircularProgress, Paper, Typography } from '@mui/material';
+import { Box, CircularProgress, Paper, Typography, Button } from '@mui/material';
 import { workflowBridge, WorldState } from './O3DEWorkflowBridge';
+import { triggerWorkflow } from '../../services/managerAPI'; // Assumes this function exists
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
 const O3DE_WEBSOCKET_URL = "ws://localhost:8004/v1/observability/ws"; // This should come from config
 
@@ -8,6 +10,8 @@ export function O3DEWorkflowVisualizer() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isEngineInitialized, setIsEngineInitialized] = useState(false);
     const [worldState, setWorldState] = useState<WorldState | null>(null);
+    const [simulationStatus, setSimulationStatus] = useState<string | null>(null);
+    const simulationId = useRef<string | null>(null);
 
     useEffect(() => {
         // Connect the bridge to the backend WebSocket
@@ -46,12 +50,39 @@ export function O3DEWorkflowVisualizer() {
         }
     }, [worldState, isEngineInitialized]);
 
+    const handleRunSimulation = async () => {
+        try {
+            setSimulationStatus("STARTING");
+            const result = await triggerWorkflow('wf_chaos_engineering_test');
+            // This is a simplification. A real implementation would need to get
+            // the simulation ID from the workflow's final result.
+            // For now, we'll just log it.
+            console.log("Chaos engineering workflow started, task_id:", result.task_id);
+            setSimulationStatus("RUNNING");
+        } catch (error) {
+            console.error("Failed to start simulation workflow:", error);
+            setSimulationStatus(`FAILED: ${(error as Error).message}`);
+        }
+    };
 
     return (
         <Paper elevation={3} sx={{ height: 'calc(100vh - 200px)', p: 2, position: 'relative' }}>
-            <Typography variant="h5" gutterBottom>
-                Live System Visualization
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h5" gutterBottom>
+                    Ethereal Twin Simulation Environment
+                </Typography>
+                <Button 
+                    variant="contained" 
+                    startIcon={<PlayArrowIcon />} 
+                    onClick={handleRunSimulation}
+                    disabled={simulationStatus === 'RUNNING'}
+                >
+                    Run Chaos Test
+                </Button>
+            </Box>
+
+            {simulationStatus && <Typography>Status: {simulationStatus}</Typography>}
+            
             {!isEngineInitialized && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                     <CircularProgress />

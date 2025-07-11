@@ -1,0 +1,19 @@
+workflow_id: "wf_autonomous_venture_creation"
+original_prompt: "Activate the Venture Capitalist agent to seek out and execute profitable tasks from the external marketplace."
+shared_context: {}
+
+tasks:
+  - task_id: "seek_and_launch_ventures"
+    type: "task"
+    agent_personality: "vc_agent"
+    prompt: |
+      Your mission is to generate value.
+      Begin your primary workflow:
+      1. Scan the marketplace for opportunities.
+      2. Vet the opportunities for profitability and feasibility.
+      3. Form the most efficient squad for the best opportunity.
+      4. Launch the venture and secure the gig.
+      5. Report your actions.
+      
+      This is a continuous, high-stakes task. The financial health of the platform is in your hands. Begin.
+    dependencies: [] 

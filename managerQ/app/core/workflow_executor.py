@@ -1,6 +1,6 @@
 import logging
 import threading
-from typing import Optional, List, Set
+from typing import Optional, List, Set, Tuple
 import jinja2
 import json
 from datetime import datetime
@@ -8,7 +8,7 @@ import time # Added for workflow duration metric
 
 from managerQ.app.core.workflow_manager import workflow_manager
 from managerQ.app.core.task_dispatcher import task_dispatcher
-from managerQ.app.models import TaskStatus, WorkflowStatus, Workflow, TaskBlock, WorkflowTask, ConditionalBlock, ApprovalBlock, LoopBlock, WorkflowEvent
+from managerQ.app.models import TaskStatus, WorkflowStatus, Workflow, TaskBlock, WorkflowTask, ConditionalBlock, ApprovalBlock, LoopBlock, WorkflowEvent, EthicalReviewStatus
 from managerQ.app.api.dashboard_ws import broadcast_workflow_event
 import asyncio
 import pulsar
@@ -510,7 +510,24 @@ class WorkflowExecutor:
         ))
 
     async def _dispatch_task(self, task: WorkflowTask, workflow: Workflow):
-        """Renders a task's prompt and dispatches it to an agent."""
+        """
+        Dispatches a task for execution, potentially after an ethical review.
+        """
+        # --- NEW: Ethical Review Gate ---
+        if self._is_critical_task(task):
+            logger.info("Critical task requires ethical review", task_id=task.task_id)
+            review_status, review_details = await self._perform_ethical_review(task, workflow)
+            
+            if review_status == EthicalReviewStatus.VETOED:
+                logger.warning("Ethical review VETOED, halting workflow.", task_id=task.task_id, details=review_details)
+                workflow.status = WorkflowStatus.FAILED
+                workflow.final_result = f"Ethical Veto: {review_details}"
+                workflow_manager.update_workflow(workflow)
+                return # Stop execution
+            
+            logger.info("Ethical review APPROVED", task_id=task.task_id)
+        # --- End Ethical Review Gate ---
+        
         logger.info(f"Dispatching task '{task.task_id}' for workflow '{workflow.workflow_id}' to Pulsar.")
         
         try:
@@ -597,6 +614,51 @@ class WorkflowExecutor:
 
         context['tasks'] = task_results
         return context
+
+    def _is_critical_task(self, task: WorkflowTask) -> bool:
+        """Determines if a task requires ethical review."""
+        # A more sophisticated implementation would analyze the tools and prompt.
+        # For now, we'll flag tasks assigned to devops or security agents.
+        critical_personalities = ["devops", "security_analyst"]
+        return task.agent_personality in critical_personalities
+
+    async def _perform_ethical_review(self, task: WorkflowTask, workflow: Workflow) -> Tuple[EthicalReviewStatus, str]:
+        """Dispatches a task to a squad of Guardian agents and awaits their verdict."""
+        proposed_plan = {
+            "task_id": task.task_id,
+            "agent_personality": task.agent_personality,
+            "prompt": task.prompt,
+            "workflow_id": workflow.workflow_id
+        }
+        
+        review_prompt = f"Please review the following proposed action plan for ethical concerns against the platform constitution: {json.dumps(proposed_plan, indent=2)}"
+        
+        # Dispatch to a squad of 3 guardians for redundancy and consensus
+        guardian_task_ids = [
+            self.task_dispatcher.dispatch_task(prompt=review_prompt, agent_personality="guardian_agent")
+            for _ in range(3)
+        ]
+        
+        # Await all results
+        results = await asyncio.gather(
+            *[self.task_dispatcher.await_task_result(task_id, timeout=120) for task_id in guardian_task_ids]
+        )
+        
+        # Tally the votes
+        vetoes = 0
+        reasons = []
+        for result_json in results:
+            if result_json:
+                decision_data = json.loads(json.loads(result_json)["result"])
+                if decision_data.get("decision") == "VETO":
+                    vetoes += 1
+                    reasons.append(decision_data.get("reasoning"))
+
+        # Majority vote determines the outcome
+        if vetoes >= 2:
+            return EthicalReviewStatus.VETOED, "; ".join(reasons)
+        else:
+            return EthicalReviewStatus.APPROVED, "Review passed."
 
 # Singleton instance
 workflow_executor = WorkflowExecutor() 

@@ -49,6 +49,24 @@ def get_llm_usage_costs(config: dict = None) -> str:
 
     return json.dumps(cost_data, indent=2)
 
+def get_venture_pnl_summary(config: dict = None) -> str:
+    """
+    Retrieves a summary of the Profit & Loss for autonomous ventures.
+    (This is a mock tool and returns generated data).
+    """
+    logger.info("Fetching Venture P&L summary.")
+    
+    revenue = random.uniform(500, 2000)
+    costs = revenue * random.uniform(0.2, 0.6) # Costs are a % of revenue
+    profit = revenue - costs
+    
+    summary = {
+        "total_ventures": random.randint(5, 15),
+        "total_revenue_usd": round(revenue, 2),
+        "total_cost_usd": round(costs, 2),
+        "net_profit_usd": round(profit, 2)
+    }
+    return json.dumps(summary)
 
 cloud_spend_tool = Tool(
     name="get_cloud_spend",
@@ -62,4 +80,10 @@ llm_usage_tool = Tool(
     func=get_llm_usage_costs
 )
 
-finops_tools = [cloud_spend_tool, llm_usage_tool] 
+venture_pnl_tool = Tool(
+    name="get_venture_pnl_summary",
+    description="Retrieves a Profit & Loss (P&L) summary for completed autonomous ventures.",
+    func=get_venture_pnl_summary
+)
+
+finops_tools = [cloud_spend_tool, llm_usage_tool, venture_pnl_tool] 

@@ -1,0 +1,16 @@
+workflow_id: "wf_chaos_engineering_test"
+original_prompt: "Run a chaos engineering experiment to validate the platform's resilience to a critical, multi-agent incident."
+shared_context:
+  # The name of the test scenario to execute in the AgentSandbox
+  scenario_to_run: "multi_agent_workflow_test"
+
+tasks:
+  - task_id: "execute_chaos_scenario"
+    type: "task"
+    agent_personality: "scenario_architect"
+    prompt: |
+      You are to execute a chaos engineering test.
+      Your mission is to run the scenario named '{{ shared_context.scenario_to_run }}' using the `run_simulation_scenario` tool.
+      
+      The full, unmodified JSON report from the simulation tool must be your final answer.
+    dependencies: [] 

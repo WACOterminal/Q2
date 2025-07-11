@@ -25,14 +25,23 @@ const noIssuesReport = {
     recommendation: "Costs are within expected parameters."
 };
 
+const placeholderVentureReport = {
+    total_ventures: 12,
+    total_revenue_usd: 1850.75,
+    total_cost_usd: 740.30,
+    net_profit_usd: 1110.45
+};
+
 export function FinOpsSummaryWidget() {
     const [report, setReport] = useState<any>(null);
+    const [ventureReport, setVentureReport] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Simulate fetching data
+        // Simulate fetching data for both reports
         setTimeout(() => {
             setReport(Math.random() > 0.5 ? placeholderReport : noIssuesReport);
+            setVentureReport(placeholderVentureReport);
             setLoading(false);
         }, 1800);
     }, []);
@@ -75,6 +84,29 @@ export function FinOpsSummaryWidget() {
                                 </ListItem>
                             )}
                         </List>
+                        
+                        {/* --- NEW: Venture P&L Section --- */}
+                        {ventureReport && (
+                            <>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="h6" sx={{ mt: 2, fontSize: '1rem' }}>
+                                    Autonomous Ventures P&L
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Total Ventures: {ventureReport.total_ventures}
+                                </Typography>
+                                <Typography variant="body2" color="success.main">
+                                    Total Revenue: ${ventureReport.total_revenue_usd.toFixed(2)}
+                                </Typography>
+                                <Typography variant="body2" color="error.main">
+                                    Est. Costs: ${ventureReport.total_cost_usd.toFixed(2)}
+                                </Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                    Net Profit: ${ventureReport.net_profit_usd.toFixed(2)}
+                                </Typography>
+                            </>
+                        )}
+                        {/* --- End Venture P&L Section --- */}
                     </Box>
                 ) : (
                      <Typography variant="body1" color="text.secondary">

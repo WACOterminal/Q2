@@ -3,7 +3,7 @@ import uvicorn
 import structlog
 import os
 
-from app.api import connectors, credentials, flows, webhooks, openproject
+from app.api import connectors, credentials, flows, webhooks, openproject, gig_marketplace
 from app.core.engine import engine
 from app.core.config import config
 from app.core.pulsar_client import close_pulsar_producers
@@ -18,9 +18,9 @@ logger = structlog.get_logger(__name__)
 
 # --- FastAPI App ---
 app = FastAPI(
-    title="IntegrationHub",
-    version="0.1.0",
-    description="A service for connecting to and synchronizing with external systems."
+    title="Q Platform IntegrationHub",
+    description="A service for connecting to external tools and APIs.",
+    version="1.0.0"
 )
 
 # Setup Prometheus metrics
@@ -40,11 +40,14 @@ async def shutdown_event():
     pass
 
 # --- API Routers ---
-app.include_router(connectors.router, prefix="/connectors", tags=["Connectors"])
-app.include_router(credentials.router, prefix="/credentials", tags=["Credentials"])
-app.include_router(flows.router, prefix="/flows", tags=["Flows"])
-app.include_router(webhooks.router, prefix="/hooks", tags=["Webhooks"])
-app.include_router(openproject.router, prefix="/openproject", tags=["OpenProject"])
+app.include_router(connectors.router, prefix="/api/v1/connectors", tags=["Connectors"])
+app.include_router(credentials.router, prefix="/api/v1/credentials", tags=["Credentials"])
+app.include_router(flows.router, prefix="/api/v1/flows", tags=["Flows"])
+app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"])
+app.include_router(openproject.router, prefix="/api/v1/openproject", tags=["OpenProject"])
+
+# --- NEW: Include the Gig Marketplace router ---
+app.include_router(gig_marketplace.router, prefix="/api/v1/marketplace", tags=["Gig Marketplace"])
 
 @app.get("/health", tags=["Health"])
 def health_check():

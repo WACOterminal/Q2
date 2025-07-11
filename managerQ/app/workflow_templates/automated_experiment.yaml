@@ -1,0 +1,56 @@
+workflow_id: "wf_automated_scientific_experiment"
+original_prompt: "Formulate a hypothesis for platform improvement, implement it, test it in a simulation, and analyze the results."
+shared_context:
+  # The initial high-level goal for the scientist
+  research_goal: "Find a way to reduce memory usage in the IntegrationHub service."
+  target_service: "IntegrationHub"
+  benchmark_scenario: "auth_and_search_e2e" # A scenario that will stress the target service
+
+tasks:
+  - task_id: "formulate_hypothesis"
+    type: "task"
+    agent_personality: "chief_scientist"
+    prompt: "Based on the research goal '{{ shared_context.research_goal }}', formulate a specific, testable hypothesis. Your output must be a JSON object with 'hypothesis' and 'proposed_change_description' fields."
+    dependencies: []
+
+  - task_id: "implement_experiment"
+    type: "task"
+    agent_personality: "devops"
+    prompt: |
+      An experiment has been designed. You must implement the proposed change in a new feature branch.
+      Hypothesis: {{ tasks.formulate_hypothesis.result.hypothesis }}
+      Proposed Change: {{ tasks.formulate_hypothesis.result.proposed_change_description }}
+      Target Service: {{ shared_context.target_service }}
+      
+      Use your code modification tools to create a new branch and apply this change. Your final output must be the name of the new feature branch.
+    dependencies: ["formulate_hypothesis"]
+
+  - task_id: "run_benchmark"
+    type: "task"
+    agent_personality: "scenario_architect"
+    prompt: "Run the benchmark scenario '{{ shared_context.benchmark_scenario }}' against the experimental feature branch '{{ tasks.implement_experiment.result }}'. This requires configuring the sandbox to use the new code. Your final output must be the full simulation results."
+    dependencies: ["implement_experiment"]
+
+  - task_id: "analyze_and_conclude"
+    type: "task"
+    agent_personality: "chief_scientist"
+    prompt: |
+      The experiment is complete.
+      Hypothesis: {{ tasks.formulate_hypothesis.result.hypothesis }}
+      Benchmark Results: {{ tasks.run_benchmark.result }}
+      
+      Analyze the results to determine if the hypothesis was supported, refuted, or if the results are inconclusive.
+      Your final answer must be a markdown report containing your conclusion and a recommendation on whether to merge the change.
+      Your conclusion must contain the string "Conclusion: SUPPORTED" or "Conclusion: REFUTED".
+    dependencies: ["run_benchmark"]
+
+  - task_id: "merge_improvement"
+    type: "task"
+    agent_personality: "devops"
+    prompt: |
+      The scientific experiment was a success and the hypothesis was supported.
+      You must now merge the feature branch '{{ tasks.implement_experiment.result }}' into the main branch to deploy the improvement.
+      Use the appropriate git tool to perform the merge.
+    dependencies: ["analyze_and_conclude"]
+    # This task only runs if the scientist's report includes the magic string.
+    condition: "'Conclusion: SUPPORTED' in tasks.analyze_and_conclude.result" 

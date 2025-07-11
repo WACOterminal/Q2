@@ -76,6 +76,9 @@ from agentQ.app.services.spiking_neural_networks import spiking_neural_networks
 from agentQ.app.services.neuromorphic_engine import neuromorphic_engine
 from agentQ.app.services.energy_efficient_computing import energy_efficient_computing
 
+# --- NEW: Import AgentSandbox ---
+from AgentSandbox.app.main import app as agentsandbox_app
+
 # --- Reflector Agent ---
 REFLECTOR_AGENT_ID = "agentq-reflector-singleton"
 REFLECTOR_TASK_TOPIC = f"persistent://public/default/q.agentq.tasks.{REFLECTOR_AGENT_ID}"
@@ -466,6 +469,12 @@ def health_check():
 def run_health_server():
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
+# --- NEW: Function to run the AgentSandbox service ---
+def run_sandbox_service():
+    """Runs the AgentSandbox FastAPI app in a separate thread."""
+    logger.info("Starting AgentSandbox service...")
+    uvicorn.run(agentsandbox_app, host="0.0.0.0", port=8004)
+
 # --- NEW: Background Service Management ---
 async def start_background_services():
     """Initializes and starts all advanced background services."""
@@ -757,6 +766,9 @@ def run_agent():
 
             # Start the new emerging AI monitoring
             threading.Thread(target=emerging_ai_monitoring.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+
+            # Start the AgentSandbox service
+            threading.Thread(target=run_sandbox_service, daemon=True).start()
 
 
     except Exception as e:

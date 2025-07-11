@@ -15,6 +15,7 @@ import { FinOpsSummaryWidget } from './FinOpsSummaryWidget';
 import { PredictiveScalingWidget } from './PredictiveScalingWidget';
 import { NeuromorphicMonitorWidget } from './NeuromorphicMonitorWidget';
 import { StrategicBriefingWidget } from './StrategicBriefingWidget';
+import { EthicalReviewWidget } from './EthicalReviewWidget';
 
 interface Anomaly {
     id: string;
@@ -129,6 +130,11 @@ export const Dashboard: React.FC = () => {
                 Dashboard Status: {connectionStatus}
             </div>
             <Grid container spacing={3}>
+                {/* NEW: Ethical Review Alert Area */}
+                <Grid item xs={12}>
+                    <EthicalReviewWidget />
+                </Grid>
+
                 {/* First Row */}
                 <Grid item xs={12}>
                     <StrategicBriefingWidget />
