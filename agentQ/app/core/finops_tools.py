@@ -239,21 +239,207 @@ class CloudBillingClient:
             return {"error": "GCP client not configured", "total": 0, "services": []}
         
         try:
-            # Note: GCP billing export to BigQuery is recommended for detailed analysis
-            # This is a simplified version using the billing API
+            loop = asyncio.get_event_loop()
             
-            # For now, return structured placeholder until BigQuery export is configured
-            logger.info("GCP billing requires BigQuery export configuration for detailed costs")
-            return {
-                'provider': 'GCP',
-                'total_cost_usd': 0,
-                'services': [],
-                'note': 'Configure BigQuery billing export for detailed GCP costs'
+            # Format dates for GCP API (requires YYYY-MM-DD format)
+            start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+            end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+            
+            # Build the request
+            project_resource = f"projects/{self.gcp_project_id}"
+            request_body = {
+                "aggregation": {
+                    "alignmentPeriod": "86400s",  # Daily
+                    "perSeriesAligner": "ALIGN_SUM",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": ["resource.label.service"]
+                },
+                "filter": f'resource.type="gce_instance" OR resource.type="k8s_container" OR resource.type="cloud_function"',
+                "interval": {
+                    "startTime": start_datetime.strftime("%Y-%m-%dT00:00:00Z"),
+                    "endTime": end_datetime.strftime("%Y-%m-%dT23:59:59Z")
+                },
+                "view": "FULL"
             }
+            
+            # Query Cloud Billing API for cost data
+            response = await loop.run_in_executor(
+                self._executor,
+                lambda: self.gcp_billing_client.projects().services().skus().list(
+                    parent=project_resource
+                ).execute()
+            )
+            
+            # Alternative: Use Cloud Asset Inventory for resource costs
+            # This is a more comprehensive approach
+            try:
+                from google.cloud import asset_v1
+                from google.cloud import billing_v1
+                
+                # Get billing account
+                billing_client = billing_v1.CloudBillingClient()
+                billing_account = await loop.run_in_executor(
+                    self._executor,
+                    lambda: billing_client.get_project_billing_info(
+                        name=f"projects/{self.gcp_project_id}"
+                    )
+                )
+                
+                if billing_account.billing_enabled:
+                    # Query billing data
+                    billing_account_name = billing_account.billing_account_name
+                    
+                    # Use BigQuery if available for more detailed analysis
+                    if hasattr(self, 'bigquery_client') and self.bigquery_client:
+                        costs_data = await self._query_gcp_billing_export(start_date, end_date)
+                    else:
+                        # Fall back to service usage estimation
+                        costs_data = await self._estimate_gcp_costs(start_date, end_date)
+                    
+                    return costs_data
+                else:
+                    return {
+                        'provider': 'GCP',
+                        'total_cost_usd': 0,
+                        'services': [],
+                        'note': 'Billing not enabled for this project'
+                    }
+                    
+            except ImportError:
+                logger.warning("Google Cloud libraries not fully available")
+                
+            # Fallback: Estimate costs based on service usage
+            return await self._estimate_gcp_costs(start_date, end_date)
             
         except Exception as e:
             logger.error(f"Failed to fetch GCP costs: {e}")
             return {"error": str(e), "total": 0, "services": []}
+    
+    async def _query_gcp_billing_export(self, start_date: str, end_date: str) -> Dict[str, Any]:
+        """Query GCP billing export from BigQuery"""
+        try:
+            from google.cloud import bigquery
+            
+            # BigQuery SQL to get billing data
+            query = f"""
+            SELECT 
+                service.description as service_name,
+                SUM(cost) as total_cost,
+                currency
+            FROM `{self.gcp_project_id}.billing_export.gcp_billing_export_v1_{self.gcp_billing_account_id}`
+            WHERE DATE(usage_start_time) >= '{start_date}'
+            AND DATE(usage_end_time) <= '{end_date}'
+            GROUP BY service.description, currency
+            ORDER BY total_cost DESC
+            """
+            
+            loop = asyncio.get_event_loop()
+            query_job = await loop.run_in_executor(
+                self._executor,
+                lambda: self.bigquery_client.query(query)
+            )
+            
+            results = await loop.run_in_executor(
+                self._executor,
+                lambda: list(query_job)
+            )
+            
+            total_cost = 0
+            services = []
+            
+            for row in results:
+                cost = float(row.total_cost)
+                total_cost += cost
+                
+                # Map GCP service names to our services
+                mapped_name = self._map_gcp_service_name(row.service_name)
+                
+                services.append({
+                    'service': mapped_name,
+                    'cost_usd': cost,
+                    'provider': 'GCP',
+                    'currency': row.currency
+                })
+            
+            return {
+                'provider': 'GCP',
+                'total_cost_usd': round(total_cost, 2),
+                'services': services,
+                'source': 'BigQuery Billing Export'
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to query GCP billing export: {e}")
+            return await self._estimate_gcp_costs(start_date, end_date)
+    
+    async def _estimate_gcp_costs(self, start_date: str, end_date: str) -> Dict[str, Any]:
+        """Estimate GCP costs based on resource usage"""
+        try:
+            # This is a simplified estimation based on common GCP services
+            # In production, you would integrate with the actual billing API
+            
+            services = [
+                {
+                    'service': 'QuantumPulse',
+                    'cost_usd': 0,  # Would calculate based on Compute Engine usage
+                    'provider': 'GCP',
+                    'estimated': True
+                },
+                {
+                    'service': 'VectorStoreQ',
+                    'cost_usd': 0,  # Would calculate based on Cloud Storage usage
+                    'provider': 'GCP',
+                    'estimated': True
+                },
+                {
+                    'service': 'KnowledgeGraphQ',
+                    'cost_usd': 0,  # Would calculate based on Cloud SQL usage
+                    'provider': 'GCP',
+                    'estimated': True
+                }
+            ]
+            
+            return {
+                'provider': 'GCP',
+                'total_cost_usd': 0,
+                'services': services,
+                'note': 'Requires BigQuery billing export or Cloud Billing API configuration for accurate costs',
+                'estimation_method': 'Service usage based estimation (placeholder)'
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to estimate GCP costs: {e}")
+            return {"error": str(e), "total": 0, "services": []}
+    
+    def _map_gcp_service_name(self, gcp_service: str) -> str:
+        """Map GCP service names to our internal service names"""
+        mapping = {
+            'Compute Engine': 'QuantumPulse',
+            'Google Kubernetes Engine': 'ManagerQ',
+            'Cloud Storage': 'VectorStoreQ',
+            'Cloud SQL': 'KnowledgeGraphQ',
+            'Cloud Functions': 'AgentQ',
+            'Cloud Run': 'IntegrationHub',
+            'Cloud CDN': 'WebAppQ',
+            'BigQuery': 'QuantumPulse',
+            'AI Platform': 'QuantumPulse'
+        }
+        
+        for gcp_name, our_name in mapping.items():
+            if gcp_name.lower() in gcp_service.lower():
+                return our_name
+        
+        # Default mapping based on keywords
+        if 'compute' in gcp_service.lower():
+            return 'QuantumPulse'
+        elif 'storage' in gcp_service.lower():
+            return 'VectorStoreQ'
+        elif 'database' in gcp_service.lower() or 'sql' in gcp_service.lower():
+            return 'KnowledgeGraphQ'
+        elif 'function' in gcp_service.lower():
+            return 'AgentQ'
+        else:
+            return 'Other'
     
     async def get_azure_costs(self, start_date: str, end_date: str) -> Dict[str, Any]:
         """Fetch Azure costs using Cost Management API"""
@@ -261,20 +447,187 @@ class CloudBillingClient:
             return {"error": "Azure client not configured", "total": 0, "services": []}
         
         try:
-            # Note: Azure Cost Management API requires specific scope and query format
-            # This is a simplified version
+            loop = asyncio.get_event_loop()
             
-            logger.info("Azure billing integration pending full configuration")
-            return {
-                'provider': 'Azure',
-                'total_cost_usd': 0,
-                'services': [],
-                'note': 'Azure Cost Management API integration pending'
+            # Format dates for Azure API (ISO format)
+            start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+            end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+            
+            # Azure scope (subscription level)
+            scope = f"/subscriptions/{self.azure_subscription_id}"
+            
+            # Build cost query parameters
+            query_definition = {
+                "type": "ActualCost",
+                "timeframe": "Custom",
+                "timePeriod": {
+                    "from": start_datetime.strftime("%Y-%m-%dT00:00:00+00:00"),
+                    "to": end_datetime.strftime("%Y-%m-%dT23:59:59+00:00")
+                },
+                "dataset": {
+                    "granularity": "Daily",
+                    "aggregation": {
+                        "totalCost": {
+                            "name": "Cost",
+                            "function": "Sum"
+                        }
+                    },
+                    "grouping": [
+                        {
+                            "type": "Dimension",
+                            "name": "ServiceName"
+                        }
+                    ]
+                }
             }
+            
+            # Query Azure Cost Management API
+            try:
+                response = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.azure_cost_client.query.usage(
+                        scope=scope,
+                        parameters=query_definition
+                    )
+                )
+                
+                # Parse Azure response
+                total_cost = 0
+                services = []
+                
+                for row in response.rows:
+                    cost = float(row[0])  # Cost is typically the first column
+                    service_name = row[1] if len(row) > 1 else "Unknown"
+                    total_cost += cost
+                    
+                    # Map Azure service names to our services
+                    mapped_name = self._map_azure_service_name(service_name)
+                    
+                    # Check if service already exists in our list
+                    existing = next((s for s in services if s['service'] == mapped_name), None)
+                    
+                    if existing:
+                        existing['cost_usd'] += cost
+                    else:
+                        services.append({
+                            'service': mapped_name,
+                            'cost_usd': cost,
+                            'provider': 'Azure'
+                        })
+                
+                # Get additional Azure metrics
+                metrics = await self._get_azure_usage_metrics(scope)
+                
+                return {
+                    'provider': 'Azure',
+                    'total_cost_usd': round(total_cost, 2),
+                    'services': sorted(services, key=lambda x: x['cost_usd'], reverse=True),
+                    'metrics': metrics,
+                    'source': 'Azure Cost Management API'
+                }
+                
+            except Exception as api_error:
+                logger.error(f"Azure Cost Management API error: {api_error}")
+                # Fall back to estimation
+                return await self._estimate_azure_costs(start_date, end_date)
             
         except Exception as e:
             logger.error(f"Failed to fetch Azure costs: {e}")
             return {"error": str(e), "total": 0, "services": []}
+    
+    async def _get_azure_usage_metrics(self, scope: str) -> Dict[str, Any]:
+        """Get additional Azure usage metrics"""
+        try:
+            loop = asyncio.get_event_loop()
+            
+            # Example: Get VM usage hours
+            # This would use Azure Monitor API for detailed metrics
+            
+            # Placeholder for Azure Monitor integration
+            return {
+                'vm_hours': 0,  # Would come from Azure Monitor
+                'storage_gb': 0,  # Would come from Azure Monitor
+                'note': 'Azure Monitor integration for detailed metrics pending'
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get Azure metrics: {e}")
+            return {}
+    
+    async def _estimate_azure_costs(self, start_date: str, end_date: str) -> Dict[str, Any]:
+        """Estimate Azure costs based on typical usage patterns"""
+        try:
+            # This is a simplified estimation for when the API is not available
+            services = [
+                {
+                    'service': 'QuantumPulse',
+                    'cost_usd': 0,  # Would calculate based on Virtual Machines usage
+                    'provider': 'Azure',
+                    'estimated': True
+                },
+                {
+                    'service': 'VectorStoreQ',
+                    'cost_usd': 0,  # Would calculate based on Storage Account usage
+                    'provider': 'Azure',
+                    'estimated': True
+                },
+                {
+                    'service': 'KnowledgeGraphQ',
+                    'cost_usd': 0,  # Would calculate based on Azure SQL usage
+                    'provider': 'Azure',
+                    'estimated': True
+                },
+                {
+                    'service': 'ManagerQ',
+                    'cost_usd': 0,  # Would calculate based on Container Instances usage
+                    'provider': 'Azure',
+                    'estimated': True
+                }
+            ]
+            
+            return {
+                'provider': 'Azure',
+                'total_cost_usd': 0,
+                'services': services,
+                'note': 'Requires Azure Cost Management API configuration for accurate costs',
+                'estimation_method': 'Service usage based estimation (placeholder)'
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to estimate Azure costs: {e}")
+            return {"error": str(e), "total": 0, "services": []}
+    
+    def _map_azure_service_name(self, azure_service: str) -> str:
+        """Map Azure service names to our internal service names"""
+        mapping = {
+            'Virtual Machines': 'QuantumPulse',
+            'Azure Kubernetes Service': 'ManagerQ',
+            'Storage': 'VectorStoreQ',
+            'Azure SQL Database': 'KnowledgeGraphQ',
+            'Azure Functions': 'AgentQ',
+            'Container Instances': 'IntegrationHub',
+            'Azure CDN': 'WebAppQ',
+            'Cognitive Services': 'QuantumPulse',
+            'Machine Learning': 'QuantumPulse'
+        }
+        
+        for azure_name, our_name in mapping.items():
+            if azure_name.lower() in azure_service.lower():
+                return our_name
+        
+        # Default mapping based on keywords
+        if 'virtual' in azure_service.lower() or 'compute' in azure_service.lower():
+            return 'QuantumPulse'
+        elif 'storage' in azure_service.lower():
+            return 'VectorStoreQ'
+        elif 'database' in azure_service.lower() or 'sql' in azure_service.lower():
+            return 'KnowledgeGraphQ'
+        elif 'function' in azure_service.lower():
+            return 'AgentQ'
+        elif 'container' in azure_service.lower():
+            return 'ManagerQ'
+        else:
+            return 'Other'
     
     async def get_consolidated_costs(self) -> Dict[str, Any]:
         """Get consolidated costs from all cloud providers"""
