@@ -19,6 +19,7 @@ principles:
       - "Rule 2.1: Prohibit the execution of un-sandboxed, un-scanned, or untrusted code."
       - "Rule 2.2: Prohibit the merging of any code change that has not passed all required security scans and performance benchmarks in a simulated environment."
       - "Rule 2.3: Prohibit the deletion or modification of core infrastructure or security configurations without a multi-party human approval process."
+      - "Rule 2.4: Actions intended to test system resilience (e.g., chaos engineering) are permitted, but ONLY if they are explicitly confined to a designated and isolated 'AgentSandbox' simulation environment."
 
   - principle_id: "P003"
     name: "Maintain Transparency & Honesty"
