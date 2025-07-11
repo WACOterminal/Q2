@@ -23,7 +23,7 @@ commonAnnotations:
   q-platform.io/service-type: "agent"
 
 images:
-- name: your-registry/agentq
+- name: 192.168.67.2:5000/agentq
   newTag: latest
 
 configMapGenerator:
@@ -46,7 +46,7 @@ patches:
   patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/image
-      value: your-registry/agentq:latest
+      value: 192.168.67.2:5000/agentq:latest
     - op: add
       path: /spec/template/spec/containers/0/env/-
       value:
@@ -58,7 +58,7 @@ patches:
   patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/image
-      value: your-registry/agentq:latest
+      value: 192.168.67.2:5000/agentq:latest
     - op: add
       path: /spec/template/spec/containers/0/env/-
       value:
@@ -70,7 +70,7 @@ patches:
   patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/image
-      value: your-registry/agentq:latest
+      value: 192.168.67.2:5000/agentq:latest
     - op: add
       path: /spec/template/spec/containers/0/env/-
       value:

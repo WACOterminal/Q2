@@ -24,23 +24,23 @@ annotations:
   licenses: Apache-2.0
   images: |
     - name: manager-q
-      image: your-registry/manager-q:1.0.0
+      image: 192.168.67.2:5000/manager-q:1.0.0
     - name: agent-q
-      image: your-registry/agent-q:1.0.0
+      image: 192.168.67.2:5000/agent-q:1.0.0
     - name: h2m-service
-      image: your-registry/h2m-service:1.0.0
+      image: 192.168.67.2:5000/h2m-service:1.0.0
     - name: quantum-pulse
-      image: your-registry/quantum-pulse:1.0.0
+      image: 192.168.67.2:5000/quantum-pulse:1.0.0
     - name: vector-store-q
-      image: your-registry/vector-store-q:1.0.0
+      image: 192.168.67.2:5000/vector-store-q:1.0.0
     - name: knowledge-graph-q
-      image: your-registry/knowledge-graph-q:1.0.0
+      image: 192.168.67.2:5000/knowledge-graph-q:1.0.0
     - name: integration-hub
-      image: your-registry/integration-hub:1.0.0
+      image: 192.168.67.2:5000/integration-hub:1.0.0
     - name: user-profile-q
-      image: your-registry/user-profile-q:1.0.0
+      image: 192.168.67.2:5000/user-profile-q:1.0.0
     - name: webapp-q
-      image: your-registry/webapp-q:1.0.0
+      image: 192.168.67.2:5000/webapp-q:1.0.0
 
 dependencies:
   # Core Infrastructure Dependencies

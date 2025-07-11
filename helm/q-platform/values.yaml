@@ -1,7 +1,7 @@
 # Q Platform Configuration
 global:
   # Global image configuration
-  imageRegistry: "your-registry.com"
+  imageRegistry: "192.168.67.2:5000"
   imagePullSecrets: []
   storageClass: "fast-ssd"
   

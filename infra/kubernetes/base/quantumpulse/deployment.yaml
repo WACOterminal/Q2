@@ -39,7 +39,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: quantumpulse
-        image: your-registry/quantumpulse:latest
+        image: 192.168.67.2:5000/quantumpulse:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

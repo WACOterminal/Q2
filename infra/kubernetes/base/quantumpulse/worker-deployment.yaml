@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: quantumpulse-worker
-        image: your-registry/quantumpulse-worker:latest
+        image: 192.168.67.2:5000/quantumpulse-worker:latest
         command:
         - "python"
         - "app/workers/specific_model_worker.py"

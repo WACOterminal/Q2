@@ -39,7 +39,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: h2m
-        image: your-registry/h2m:latest
+        image: 192.168.67.2:5000/h2m:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

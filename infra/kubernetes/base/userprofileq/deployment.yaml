@@ -39,7 +39,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: userprofileq
-        image: your-registry/userprofileq:latest
+        image: 192.168.67.2:5000/userprofileq:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

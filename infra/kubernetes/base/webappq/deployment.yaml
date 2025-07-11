@@ -36,7 +36,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: webappq
-        image: your-registry/webappq:latest
+        image: 192.168.67.2:5000/webappq:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
