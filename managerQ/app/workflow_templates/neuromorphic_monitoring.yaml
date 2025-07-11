@@ -1,0 +1,19 @@
+workflow_id: "wf_neuromorphic_market_monitoring"
+original_prompt: "Initiate continuous, real-time anomaly detection on the financial market data stream using the neuromorphic agent."
+shared_context:
+  # The Pulsar topic our SNN will monitor
+  market_data_topic: "persistent://public/default/market-data"
+
+tasks:
+  - task_id: "start_snn_monitoring"
+    type: "task"
+    agent_personality: "neuromorphic_analyst"
+    prompt: |
+      Your mission is to provide continuous, real-time anomaly detection of a high-frequency data stream.
+
+      1.  **Configure the SNN**: Your first step is to configure the Spiking Neural Network to monitor the topic specified in the shared context: `{{ shared_context.market_data_topic }}`. Use the appropriate tool.
+      2.  **Enter Monitoring Loop**: Once the network is configured, you must repeatedly use the `get_snn_anomalies` tool to check for threats.
+      3.  **Report Immediately**: If you detect any anomalies, your task is complete. You must immediately report the JSON output from the tool as your final answer.
+      
+      This is a long-running, critical task. Begin.
+    dependencies: [] 

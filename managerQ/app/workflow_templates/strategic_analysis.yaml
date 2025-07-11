@@ -1,0 +1,39 @@
+workflow_id: "wf_strategic_quarterly_analysis"
+original_prompt: "Perform a comprehensive, cross-domain strategic analysis of the platform and generate the Quarterly Strategic Briefing."
+shared_context: {}
+
+tasks:
+  - task_id: "gather_strategic_data"
+    type: "parallel"
+    tasks:
+      - task_id: "get_finops_data"
+        type: "task"
+        agent_personality: "chief_scientist"
+        prompt: "Use the `get_finops_summary` tool."
+      - task_id: "get_security_data"
+        type: "task"
+        agent_personality: "chief_scientist"
+        prompt: "Use the `get_security_summary` tool."
+      - task_id: "get_rca_data"
+        type: "task"
+        agent_personality: "chief_scientist"
+        prompt: "Use the `get_rca_summary` tool."
+      - task_id: "get_kpi_data"
+        type: "task"
+        agent_personality: "chief_scientist"
+        prompt: "Use the `get_platform_kpis` tool."
+
+  - task_id: "synthesize_strategic_briefing"
+    type: "task"
+    agent_personality: "chief_scientist"
+    prompt: |
+      You have been provided with the latest strategic data summaries from all major platform domains:
+      - FinOps Summary: {{ tasks.get_finops_data.result }}
+      - Security Summary: {{ tasks.get_security_data.result }}
+      - RCA Summary: {{ tasks.get_rca_data.result }}
+      - Platform KPIs: {{ tasks.get_kpi_data.result }}
+
+      Your mission is to synthesize these disparate data points into 2-3 high-level, non-obvious strategic insights. Look for correlations, trade-offs, and emergent patterns.
+
+      Your final output must be a markdown document titled "Quarterly Strategic Briefing".
+    dependencies: ["gather_strategic_data"] 

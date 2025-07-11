@@ -13,6 +13,8 @@ import { SecurityScanWidget } from './SecurityScanWidget';
 import { QuantumRoutingWidget } from './QuantumRoutingWidget';
 import { FinOpsSummaryWidget } from './FinOpsSummaryWidget';
 import { PredictiveScalingWidget } from './PredictiveScalingWidget';
+import { NeuromorphicMonitorWidget } from './NeuromorphicMonitorWidget';
+import { StrategicBriefingWidget } from './StrategicBriefingWidget';
 
 interface Anomaly {
     id: string;
@@ -128,6 +130,11 @@ export const Dashboard: React.FC = () => {
             </div>
             <Grid container spacing={3}>
                 {/* First Row */}
+                <Grid item xs={12}>
+                    <StrategicBriefingWidget />
+                </Grid>
+
+                {/* Second Row */}
                 <Grid item xs={12} md={8} lg={9}>
                     <ActiveWorkflowsWidget />
                 </Grid>
@@ -135,12 +142,12 @@ export const Dashboard: React.FC = () => {
                     <AgentPerformanceWidget />
                 </Grid>
 
-                {/* Second Row: RCA Reports */}
+                {/* Third Row */}
                 <Grid item xs={12}>
                     <RCAReportsWidget />
                 </Grid>
 
-                {/* Third Row */}
+                {/* Fourth Row */}
                 <Grid item xs={12} lg={7}>
                     <SecurityScanWidget />
                 </Grid>
@@ -148,12 +155,17 @@ export const Dashboard: React.FC = () => {
                     <QuantumRoutingWidget />
                 </Grid>
 
-                {/* Fourth Row */}
+                {/* Fifth Row */}
                 <Grid item xs={12} lg={7}>
                     <FinOpsSummaryWidget />
                 </Grid>
                 <Grid item xs={12} lg={5}>
                     <PredictiveScalingWidget />
+                </Grid>
+
+                {/* Sixth Row */}
+                <Grid item xs={12}>
+                    <NeuromorphicMonitorWidget />
                 </Grid>
             </Grid>
         </div>

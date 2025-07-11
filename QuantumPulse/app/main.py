@@ -2,6 +2,12 @@ from fastapi import FastAPI
 import uvicorn
 import logging
 import structlog
+import asyncio
+from contextlib import asynccontextmanager
+import threading
+import time
+import random
+import json
 
 from app.api.endpoints import inference, fine_tuning, chat
 from app.core.pulsar_client import PulsarManager
@@ -28,13 +34,53 @@ setup_metrics(app, app_name=config.service_name)
 # Setup OpenTelemetry
 setup_tracing(app, service_name=config.service_name)
 
-@app.on_event("startup")
-def startup_event():
-    """
-    Application startup event handler.
-    Initializes the Pulsar manager and connects to the cluster.
-    """
-    logger.info("Application startup...")
+# --- NEW: Market Data Producer ---
+class MarketDataProducer(threading.Thread):
+    def __init__(self, client, topic):
+        super().__init__()
+        self.client = client
+        self.topic = topic
+        self._running = False
+
+    def run(self):
+        self._running = True
+        producer = self.client.create_producer(self.topic)
+        stocks = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"]
+        prices = {s: random.uniform(150, 2000) for s in stocks}
+
+        while self._running:
+            # Simulate market data
+            for stock in stocks:
+                price = prices[stock]
+                # Normal market fluctuation
+                change = random.uniform(-0.5, 0.5)
+                new_price = price + change
+                
+                # Chance for an anomalous spike
+                if random.random() < 0.01:
+                    spike = random.uniform(5, 10)
+                    new_price += spike if random.random() < 0.5 else -spike
+                    
+                prices[stock] = max(0, new_price)
+                
+                payload = {
+                    "symbol": stock,
+                    "price": round(prices[stock], 2),
+                    "timestamp": time.time()
+                }
+                producer.send(json.dumps(payload).encode('utf-8'))
+            
+            time.sleep(0.1) # High frequency stream
+
+    def stop(self):
+        self._running = False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("QuantumPulse API starting up...")
+    
+    # Initialize Pulsar client
     pulsar_manager_module.pulsar_manager = PulsarManager(
         service_url=config.pulsar.service_url,
         token=config.pulsar.token,
@@ -47,15 +93,17 @@ def startup_event():
         # Depending on the desired behavior, you might want to exit the application
         # exit(1)
 
-@app.on_event("shutdown")
-def shutdown_event():
-    """
-    Application shutdown event handler.
-    Closes the Pulsar client connection.
-    """
-    logger.info("Application shutdown...")
-    if pulsar_manager_module.pulsar_manager:
-        pulsar_manager_module.pulsar_manager.close()
+    # --- NEW: Start the market data producer ---
+    market_data_topic = "persistent://public/default/market-data"
+    market_producer = MarketDataProducer(pulsar_manager_module.pulsar_manager.client, market_data_topic)
+    market_producer.start()
+    
+    yield
+    
+    logger.info("QuantumPulse API shutting down...")
+    market_producer.stop()
+    market_producer.join()
+    pulsar_manager_module.pulsar_manager.close()
 
 # --- API Routers ---
 app.include_router(inference.router, prefix="/v1/inference", tags=["Inference"])

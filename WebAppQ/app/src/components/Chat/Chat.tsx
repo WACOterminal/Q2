@@ -1,325 +1,127 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
-import { AuthContext } from '../../AuthContext';
-import './Chat.css';
-import { UITableComponent } from './UITable';
-import { UIFormComponent } from './UIForm';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert, Switch, FormControlLabel } from '@mui/material';
+import { sendChatMessage } from '../../services/h2mAPI'; // Assumes this function exists
+import { SuggestionModal } from './SuggestionModal'; // A new component to create
 
-interface Message {
-    id: string;
-    text: string;
-    sender: 'user' | 'agent' | 'thought';
-    conversation_id?: string;
-    feedback?: 'good' | 'bad' | null;
-    ui_component?: any;
-    visualization_path?: string;
+// --- NEW: Co-Pilot Types ---
+interface ProposedAction {
+    tool_name: string;
+    parameters: Record<string, any>;
 }
 
+interface CoPilotApprovalRequest {
+    type: 'copilot_approval_request';
+    conversation_id: string;
+    thought: string;
+    proposed_action: ProposedAction;
+    reply_topic: string;
+}
+
+const COPILOT_WS_BASE_URL = "ws://localhost:8002/api/v1/copilot/ws"; // Should be from config
+
 const Chat: React.FC = () => {
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<any[]>([]);
     const [input, setInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const [conversationId, setConversationId] = useState<string | null>(null);
-    const [connectionStatus, setConnectionStatus] = useState<'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED' | 'RECONNECTING'>('CONNECTING');
-    const [isWaitingForClarification, setIsWaitingForClarification] = useState(false);
-    const [pendingWorkflowId, setPendingWorkflowId] = useState<string | null>(null);
+    const [isCoPilotMode, setIsCoPilotMode] = useState(true);
+    const [copilotRequest, setCopilotRequest] = useState<CoPilotApprovalRequest | null>(null);
+    const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
     
-    const authContext = useContext(AuthContext);
     const ws = useRef<WebSocket | null>(null);
-    const reconnectInterval = useRef<NodeJS.Timeout | null>(null);
-
-    const connect = () => {
-        if (!authContext?.token) {
-            console.error("No auth token, cannot connect.");
-            return;
-        }
-
-        const wsUrl = `ws://localhost:8002/api/v1/chat/ws?token=${authContext.token}`;
-        ws.current = new WebSocket(wsUrl);
-        setConnectionStatus('CONNECTING');
-
-        ws.current.onopen = () => {
-            console.log("WebSocket connected.");
-            setConnectionStatus('OPEN');
-            if (reconnectInterval.current) {
-                clearInterval(reconnectInterval.current);
-                reconnectInterval.current = null;
-            }
-        };
-
-        ws.current.onclose = () => {
-            console.log("WebSocket disconnected.");
-            setConnectionStatus('CLOSED');
-            if (!reconnectInterval.current) {
-                reconnectInterval.current = setInterval(() => {
-                    setConnectionStatus('RECONNECTING');
-                    connect();
-                }, 5000); // Try to reconnect every 5 seconds
-            }
-        };
-
-        ws.current.onerror = (error) => {
-            console.error("WebSocket error:", error);
-            ws.current?.close();
-        };
-        
-        ws.current.onmessage = (event) => {
-            const receivedMessage = JSON.parse(event.data);
-
-            // Handle streamed thoughts
-            if (receivedMessage.type === 'thought') {
-                const thoughtMessage: Message = {
-                    id: `thought-${Date.now()}-${Math.random()}`,
-                    text: `Thinking: ${receivedMessage.text}`,
-                    sender: 'thought',
-                };
-                setMessages(prev => [...prev, thoughtMessage]);
-                return;
-            }
-
-            // Handle streamed response tokens
-            if (receivedMessage.type === 'token') {
-                setMessages(prevMessages => {
-                    const lastMessage = prevMessages[prevMessages.length - 1];
-                    // If the last message was from the agent, append the token
-                    if (lastMessage && lastMessage.sender === 'agent') {
-                        const updatedMessages = [...prevMessages];
-                        updatedMessages[prevMessages.length - 1] = {
-                            ...lastMessage,
-                            text: lastMessage.text + receivedMessage.text,
-                            conversation_id: receivedMessage.conversation_id
-                        };
-                        return updatedMessages;
-                    } else {
-                        // Otherwise, create a new agent message
-                        const newMessage: Message = {
-                            id: `agent-${Date.now()}`,
-                            text: receivedMessage.text,
-                            sender: 'agent',
-                            conversation_id: receivedMessage.conversation_id,
-                            feedback: null,
-                        };
-                        return [...prevMessages, newMessage];
-                    }
-                });
-                
-                // Set conversation ID if it's the first agent message
-                if (receivedMessage.conversation_id && !conversationId) {
-                    setConversationId(receivedMessage.conversation_id);
-                }
-                return;
-            }
-
-            // Handle end-of-stream or errors if needed
-            if (receivedMessage.type === 'final' || receivedMessage.type === 'error') {
-                console.log("Stream ended or error occurred:", receivedMessage.text);
-                // Optionally, you could update the message state to indicate completion or error
-            }
-        };
-    };
 
     useEffect(() => {
-        connect();
+        // Cleanup WebSocket on component unmount
         return () => {
-            if (reconnectInterval.current) clearInterval(reconnectInterval.current);
             ws.current?.close();
         };
-    }, [authContext?.token]);
+    }, []);
+    
+    const setupWebSocket = (convId: string) => {
+        if (ws.current) ws.current.close();
 
-    const handleSendMessage = async () => {
-        if (!input.trim() || !authContext?.token || connectionStatus !== 'OPEN') return;
+        ws.current = new WebSocket(`${COPILOT_WS_BASE_URL}/${convId}`);
+        ws.current.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'copilot_approval_request') {
+                setCopilotRequest(data);
+                setIsLoading(false);
+            }
+        };
+    };
 
-        const userMessage: Message = { id: `user-${Date.now()}`, text: input, sender: 'user' };
+    const handleSend = async () => {
+        if (!input.trim()) return;
+        setIsLoading(true);
+
+        const convId = conversationId || `conv_${Date.now()}`;
+        if (!conversationId) {
+            setConversationId(convId);
+            if(isCoPilotMode) setupWebSocket(convId);
+        }
+        
+        const userMessage = { role: 'user', content: input };
         setMessages(prev => [...prev, userMessage]);
-        const currentInput = input;
         setInput('');
 
-        // If waiting for clarification, send the answer to the specific endpoint
-        if (isWaitingForClarification && pendingWorkflowId) {
-            try {
-                const res = await fetch(`http://localhost:8001/api/v1/goals/${pendingWorkflowId}/clarify`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authContext.token}` },
-                    body: JSON.stringify({ answer: currentInput }),
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    const agentMessage: Message = { id: `agent-${Date.now()}`, text: `Got it. A new workflow (${data.workflow_id}) has been created. I'll get started.`, sender: 'agent' };
-                    setMessages(prev => [...prev, agentMessage]);
-                } else {
-                    throw new Error(data.detail?.message || "Failed to submit clarification.");
-                }
-            } catch (error: any) {
-                const errorMessage: Message = { id: `agent-${Date.now()}`, text: `Error: ${error.message}`, sender: 'agent' };
-                setMessages(prev => [...prev, errorMessage]);
-            } finally {
-                setIsWaitingForClarification(false);
-                setPendingWorkflowId(null);
-            }
-            return;
-        }
-
-        // If it is a new prompt, send it to the task submission endpoint
         try {
-            const response = await fetch('http://localhost:8001/api/v1/tasks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authContext.token}` },
-                body: JSON.stringify({ prompt: currentInput }),
-            });
-            const data = await response.json();
-
-            if (response.ok) {
-                 if (data.status === 'pending_clarification') {
-                    const agentMessage: Message = { id: `agent-${Date.now()}`, text: data.clarifying_question, sender: 'agent' };
-                    setMessages(prev => [...prev, agentMessage]);
-                    setIsWaitingForClarification(true);
-                    setPendingWorkflowId(data.workflow_id);
-                } else {
-                    const agentMessage: Message = { 
-                        id: `agent-${Date.now()}`, 
-                        text: `Workflow ${data.workflow_id} submitted.`, 
-                        sender: 'agent',
-                        ui_component: {
-                            ui_component: 'workflow_link',
-                            workflow_id: data.workflow_id
-                        }
-                    };
-                    setMessages(prev => [...prev, agentMessage]);
-                }
-            } else {
-                // If the API returns a 400 for ambiguity, it's now handled by the status code check above.
-                // This will handle other errors.
-                const errorDetail = data.detail?.message || JSON.stringify(data.detail);
-                throw new Error(errorDetail);
-            }
-        } catch (error: any) {
-            const errorMessage: Message = { id: `agent-${Date.now()}`, text: `Error: ${error.message}`, sender: 'agent' };
-            setMessages(prev => [...prev, errorMessage]);
-        }
-    };
-
-    const handleFormSubmit = (data: any, messageId: string) => {
-        // Find the original agent message that contained the form
-        const agentMessage = messages.find(m => m.id === messageId);
-        if (!agentMessage || !ws.current) return;
-        
-        // In a real ReAct loop, the form submission would become the "observation"
-        // for the agent's tool call. We simulate this by sending a message back
-        // on behalf of the "system" or as the user's response.
-        // This part of the logic needs to be carefully designed. For now, we'll
-        // just display the submitted data.
-        
-        const submissionMessage: Message = {
-            id: `user-form-${Date.now()}`,
-            text: `Form submitted: ${JSON.stringify(data)}`,
-            sender: 'user',
-        };
-        setMessages(prev => [...prev, submissionMessage]);
-    };
-
-    const handleSendFeedback = async (messageId: string, feedback: 'good' | 'bad') => {
-        const message = messages.find(m => m.id === messageId);
-        if (!message || !authContext?.token) return;
-
-        console.log(`Sending feedback for message ${messageId}: ${feedback}`);
-
-        try {
-            const response = await fetch('http://localhost:8002/api/v1/feedback', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authContext.token}`,
-                },
-                body: JSON.stringify({
-                    message_id: message.id,
-                    conversation_id: message.conversation_id,
-                    feedback: feedback,
-                    text: message.text,
-                }),
-            });
-
-            if (response.ok) {
-                setMessages(prev => prev.map(m => 
-                    m.id === messageId ? { ...m, feedback } : m
-                ));
-            } else {
-                console.error('Failed to submit feedback:', response.statusText);
+            const response = await sendChatMessage(convId, input, isCoPilotMode);
+            if (!isCoPilotMode) {
+                setMessages(prev => [...prev, { role: 'assistant', content: response.answer }]);
+                setIsLoading(false);
             }
         } catch (error) {
-            console.error('Error submitting feedback:', error);
+            setMessages(prev => [...prev, { role: 'system', content: `Error: ${(error as Error).message}` }]);
+            setIsLoading(false);
         }
+    };
+    
+    const handleCopilotResponse = (decision: 'approve' | 'deny' | 'suggest', suggestion: string = '') => {
+        if (!ws.current || !copilotRequest) return;
+        
+        const response = {
+            decision,
+            suggestion,
+            reply_topic: copilotRequest.reply_topic
+        };
+        
+        ws.current.send(JSON.stringify(response));
+        setCopilotRequest(null);
+        setIsLoading(true); // Agent is now working again
     };
 
     return (
-        <div className="chat-container">
-            <div className={`connection-status ${connectionStatus.toLowerCase()}`}>
-                Status: {connectionStatus}
-            </div>
-            <div className="message-window">
-                {messages.map((msg) => (
-                    <div key={msg.id} className={`message ${msg.sender}`}>
-                        {msg.ui_component ? (
-                            <DynamicUIComponent component={msg.ui_component} message={msg} onFormSubmit={(data) => handleFormSubmit(data, msg.id)} />
-                        ) : (
-                            <div className="message-text">{msg.text}</div>
-                        )}
-                        
-                        {msg.sender === 'agent' && !msg.ui_component && ( // Hide feedback for UI components for now
-                            <div className="feedback-buttons">
-                                <button 
-                                    onClick={() => handleSendFeedback(msg.id, 'good')}
-                                    disabled={msg.feedback !== null}
-                                    className={msg.feedback === 'good' ? 'selected' : ''}
-                                >
-                                    👍
-                                </button>
-                                <button 
-                                    onClick={() => handleSendFeedback(msg.id, 'bad')}
-                                    disabled={msg.feedback !== null}
-                                    className={msg.feedback === 'bad' ? 'selected' : ''}
-                                >
-                                    👎
-                                </button>
-                            </div>
-                        )}
-                    </div>
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)' }}>
+            <Paper sx={{ flexGrow: 1, p: 2, overflowY: 'auto', mb: 2 }}>
+                {messages.map((msg, index) => (
+                    <Box key={index} sx={{ mb: 1, textAlign: msg.role === 'user' ? 'right' : 'left' }}>
+                        <Chip label={msg.content} color={msg.role === 'user' ? 'primary' : 'default'} />
+                    </Box>
                 ))}
-            </div>
-            <div className="input-area">
-                <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Type your message..."
-                    disabled={connectionStatus !== 'OPEN'}
-                />
-                <button onClick={handleSendMessage} disabled={connectionStatus !== 'OPEN'}>Send</button>
-            </div>
-        </div>
+                {copilotRequest && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                        <Typography variant="body1"><b>Agent's Thought:</b> {copilotRequest.thought}</Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}><b>Proposed Action:</b> {copilotRequest.proposed_action.tool_name}</Typography>
+                        <Box sx={{ mt: 2 }}>
+                            <Button variant="contained" color="success" onClick={() => handleCopilotResponse('approve')}>Approve</Button>
+                            <Button variant="outlined" color="error" sx={{ mx: 1 }} onClick={() => handleCopilotResponse('deny')}>Deny</Button>
+                            <Button variant="outlined" onClick={() => setIsSuggestionModalOpen(true)}>Suggest</Button>
+                        </Box>
+                    </Alert>
+                )}
+            </Paper>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControlLabel control={<Switch checked={isCoPilotMode} onChange={(e) => setIsCoPilotMode(e.target.checked)} />} label="Co-Pilot Mode" />
+                <TextField fullWidth value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSend()} />
+                <Button onClick={handleSend} disabled={isLoading || !!copilotRequest}>Send</Button>
+            </Box>
+            <SuggestionModal
+                open={isSuggestionModalOpen}
+                onClose={() => setIsSuggestionModalOpen(false)}
+                onSubmit={(suggestion) => handleCopilotResponse('suggest', suggestion)}
+            />
+        </Box>
     );
-};
-
-// A helper component to select the correct renderer
-const DynamicUIComponent: React.FC<{ component: any, message: Message, onFormSubmit: (data: any) => void }> = ({ component, message, onFormSubmit }) => {
-    switch (component.ui_component) {
-        case 'table':
-            return <UITableComponent headers={component.headers} rows={component.rows} />;
-        case 'workflow_link':
-            return (
-                <Link to={`/dashboard?workflow_id=${component.workflow_id}`} className="workflow-link">
-                    View Workflow: {component.workflow_id}
-                </Link>
-            );
-        case 'form':
-            return <UIFormComponent schema={component.schema} onSubmit={onFormSubmit} />;
-        default:
-            if (message.visualization_path) {
-                // This assumes the agent returns a path that can be served by a static file server.
-                // In a real system, you would need to configure a file server to serve the images.
-                return <img src={`http://localhost:8000/${message.visualization_path}`} alt="Data Visualization" />;
-            }
-            return <div className="message-text">{JSON.stringify(component)}</div>;
-    }
 };
 
 export default Chat;

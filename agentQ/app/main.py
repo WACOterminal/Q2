@@ -71,6 +71,11 @@ from agentQ.app.services.automated_incident_detection import automated_incident_
 from agentQ.app.services.auto_remediation_service import auto_remediation_service
 from agentQ.app.services.emerging_ai_monitoring import emerging_ai_monitoring
 
+# --- NEW: Import Neuromorphic and Energy services ---
+from agentQ.app.services.spiking_neural_networks import spiking_neural_networks
+from agentQ.app.services.neuromorphic_engine import neuromorphic_engine
+from agentQ.app.services.energy_efficient_computing import energy_efficient_computing
+
 # --- Reflector Agent ---
 REFLECTOR_AGENT_ID = "agentq-reflector-singleton"
 REFLECTOR_TASK_TOPIC = f"persistent://public/default/q.agentq.tasks.{REFLECTOR_AGENT_ID}"
@@ -246,6 +251,7 @@ def react_loop(prompt_data, context_manager, toolbox, qpulse_client, llm_config,
     user_prompt = prompt_data.get("prompt")
     conversation_id = prompt_data.get("id") # Assuming prompt_id is the conversation_id
     agent_id = prompt_data.get("agent_id") # We need the agent_id for the memory object
+    co_pilot_mode = prompt_data.get("co_pilot_mode", False) # NEW: Check for co-pilot mode
 
     # Initialize the scratchpad for this loop
     scratchpad = []
@@ -271,7 +277,7 @@ def react_loop(prompt_data, context_manager, toolbox, qpulse_client, llm_config,
     history.append({"role": "user", "content": user_prompt})
     scratchpad.append({"type": "user_prompt", "content": user_prompt, "timestamp": time.time()})
 
-    max_turns = 5
+    max_turns = 10 # Increased for co-piloting
     for turn in range(max_turns):
         current_span = trace.get_current_span()
         current_span.set_attribute("react.turn", turn)
@@ -328,6 +334,36 @@ def react_loop(prompt_data, context_manager, toolbox, qpulse_client, llm_config,
             generate_and_save_reflexion(user_prompt, scratchpad, context_manager, qpulse_client, llm_config)
             
             return "Error: Could not parse my own action. I will try again."
+
+        # --- NEW: Co-Piloting Interaction Step ---
+        if co_pilot_mode and action_json.get("action") != "finish":
+            logger.info("Co-piloting mode: Awaiting human feedback.", conversation_id=conversation_id)
+            
+            # Use a specialized tool to send the thought and wait for feedback
+            human_feedback = toolbox.execute_tool(
+                "request_copilot_approval", 
+                conversation_id=conversation_id,
+                thought=thought,
+                proposed_action=action_json
+            )
+            
+            # The feedback will be a JSON string from H2M
+            feedback_data = json.loads(human_feedback)
+            
+            if feedback_data.get("decision") == "deny":
+                history.append({"role": "system", "content": "Observation: Human co-pilot has rejected the proposed action. I must re-evaluate my plan."})
+                scratchpad.append({"type": "observation", "content": "Human co-pilot rejected the action.", "timestamp": time.time()})
+                continue # Re-run the loop to generate a new thought
+            
+            elif feedback_data.get("decision") == "suggest":
+                suggestion = feedback_data.get("suggestion", "No suggestion provided.")
+                history.append({"role": "system", "content": f"Observation: Human co-pilot provided a suggestion: {suggestion}"})
+                scratchpad.append({"type": "observation", "content": f"Human suggestion: {suggestion}", "timestamp": time.time()})
+                continue # Re-run the loop with the new suggestion in context
+            
+            # If approved, the loop continues as normal.
+            logger.info("Co-piloting: Human approved action.", conversation_id=conversation_id)
+        # --- End Co-Piloting Step ---
 
         # 4. Execute the action
         if action_json.get("action") == "finish":
@@ -442,7 +478,10 @@ async def start_background_services():
             cross_agent_knowledge_sharing.initialize(),
             automated_incident_detection.initialize(),
             auto_remediation_service.initialize(),
-            emerging_ai_monitoring.initialize()
+            emerging_ai_monitoring.initialize(),
+            spiking_neural_networks.initialize(),
+            neuromorphic_engine.initialize(),
+            energy_efficient_computing.initialize()
         )
         logger.info("All advanced background services have been initialized.")
     except Exception as e:

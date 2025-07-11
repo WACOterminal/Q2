@@ -93,6 +93,20 @@
     type: "on_startup" # In production, this would be a time-based trigger (e.g., every 15 minutes)
   remediation_workflow_id: "wf_predictive_scaling"
 
+- goal_id: "goal_neuromorphic_monitoring_on_startup"
+  objective: "Activate the neuromorphic anomaly detection system to monitor the live market data stream."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_neuromorphic_market_monitoring"
+
+- goal_id: "goal_strategic_analysis_on_startup"
+  objective: "Activate the Chief Scientist agent to perform a cross-domain strategic analysis of the platform."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_strategic_quarterly_analysis"
+
 - goal_id: "goal_zero_day_vulnerability_response"
   objective: "A critical zero-day vulnerability has been announced for the 'log4j' library. Form a squad to assess our exposure, patch all affected services, and document the response."
   is_active: true

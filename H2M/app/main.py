@@ -7,12 +7,16 @@ from fastapi import FastAPI
 import uvicorn
 import logging
 import structlog
+from fastapi import WebSocket
+from fastapi.websockets import WebSocketDisconnect
+import json
 
 from app.api import chat, feedback, registry
 from app.core.config import config
 from app.services.ignite_client import ignite_client
 from app.services.h2m_pulsar import h2m_pulsar_client
 from app.core.thought_listener import thought_listener
+from app.core.copilot_handler import copilot_handler
 from shared.observability.logging_config import setup_logging
 from shared.observability.metrics import setup_metrics
 from shared.opentelemetry.tracing import setup_tracing
@@ -39,6 +43,11 @@ async def startup_event():
     try:
         await ignite_client.connect()
         h2m_pulsar_client.start_producers()
+        
+        # --- NEW: Initialize and start the CoPilotHandler ---
+        copilot_handler.client = h2m_pulsar_client.client
+        copilot_handler.start()
+        
         thought_listener.start()
     except Exception as e:
         logger.critical(f"Could not initialize H2M services on startup: {e}", exc_info=True)
@@ -55,6 +64,21 @@ async def shutdown_event():
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
 app.include_router(registry.router, prefix="/api/v1/registry", tags=["Model Registry"])
+
+# --- NEW: Co-Pilot WebSocket Endpoint ---
+@app.websocket("/api/v1/copilot/ws/{conversation_id}")
+async def copilot_websocket_endpoint(websocket: WebSocket, conversation_id: str):
+    """Handles the co-pilot WebSocket connection for a specific conversation."""
+    await copilot_handler.register_session(conversation_id, websocket)
+    try:
+        while True:
+            # This is where we receive feedback from the human co-pilot
+            data = await websocket.receive_text()
+            response_data = json.loads(data)
+            await copilot_handler.handle_human_response(response_data)
+    except WebSocketDisconnect:
+        copilot_handler.unregister_session(conversation_id)
+        logger.info(f"Client disconnected from co-pilot session: {conversation_id}")
 
 
 @app.get("/health", tags=["Health"])
