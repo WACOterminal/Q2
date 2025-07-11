@@ -198,6 +198,29 @@ export const ingestDataSource = async (data: { url: string }): Promise<any> => {
     return response.json();
 };
 
+export const generateWorkflowFromPrompt = async (description: string): Promise<{ task_id: string }> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/v1/workflows/generate`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ description })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to start workflow generation.' }));
+        throw new Error(errorData.detail);
+    }
+
+    return response.json();
+};
+
 // --- WebSocket Management ---
 
 let dashboardSocketClient: W3CWebSocket | null = null;

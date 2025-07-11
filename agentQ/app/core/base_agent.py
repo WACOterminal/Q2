@@ -49,30 +49,24 @@ class BaseAgent:
         for tool in tools:
             self.toolbox.register_tool(tool)
         
-        # ReAct prompting templates
+        # A more explicit prompt format to guide the LLM
         self.react_prompt_template = """
 You are an intelligent agent that can reason step by step and use tools to solve problems.
 
 Available tools:
 {tools}
 
-Instructions:
-1. First, think about the problem step by step (Thought)
-2. Then, decide on an action to take (Action)
-3. Provide the action input (Action Input)
-4. Observe the results (Observation)
-5. Repeat until you can provide a final answer
-
-Format your response EXACTLY as follows:
-Thought: [Your reasoning about what to do next]
-Action: [The action you want to take - either a tool name or 'Finish']
-Action Input: [The input for the action, or your final answer if Action is 'Finish']
-
-Remember:
-- Use 'Finish' as the Action when you have a complete answer
-- Always provide clear reasoning in your Thought
-- Be specific in your Action Input
-- Only use available tools
+Follow this exact format:
+Thought: [Your reasoning and plan to solve the problem. This is your inner monologue.]
+Action:
+```json
+{{
+  "tool_name": "[The tool to use, or 'Finish' if you have the final answer]",
+  "parameters": {{
+    "param_name": "param_value"
+  }}
+}}
+```
 """
 
         logger.info(f"BaseAgent initialized with {len(tools)} tools")
@@ -86,7 +80,7 @@ Remember:
             conversation_id: Optional conversation ID for memory continuity
             
         Returns:
-            The final answer from the agent
+            A JSON string containing the final answer, the thought process, and the full history.
         """
         # Initialize agent memory
         if conversation_id is None:
@@ -98,14 +92,20 @@ Remember:
         
         try:
             # Execute the ReAct loop
-            final_answer = await self._execute_react_loop(prompt)
+            final_thought, final_answer = await self._execute_react_loop(prompt)
             
             # Update memory with completion
             if self.agent_memory:
                 self.agent_memory.last_update = datetime.now()
             
             logger.info(f"ReAct loop completed successfully for conversation: {conversation_id}")
-            return final_answer
+            
+            # Package the final result with the thought process
+            return json.dumps({
+                "thought": final_thought,
+                "result": final_answer,
+                "history": self.get_reasoning_history()
+            })
             
         except Exception as e:
             logger.error(f"Error in ReAct loop for conversation {conversation_id}: {e}", exc_info=True)
@@ -135,14 +135,14 @@ Remember:
             last_update=datetime.now()
         )
 
-    async def _execute_react_loop(self, initial_prompt: str) -> str:
+    async def _execute_react_loop(self, initial_prompt: str) -> Tuple[str, str]:
         """Execute the main ReAct reasoning loop"""
         step_number = 1
         
         # Build the initial prompt with ReAct formatting
         current_prompt = self.react_prompt_template.format(
             tools=self.toolbox.get_tool_descriptions()
-        ) + f"\n\nUser Question: {initial_prompt}\n\nNow, let's think step by step:"
+        ) + f"\n\nUser Question: {initial_prompt}\n\n"
         
         while step_number <= self.max_iterations:
             logger.info(f"ReAct step {step_number}/{self.max_iterations}")
@@ -151,31 +151,31 @@ Remember:
             response = await self._get_llm_response(current_prompt)
             
             # Parse the response
-            thought, action, action_input = self._parse_react_response(response)
+            thought, action, action_input_dict = self._parse_react_response(response)
             
             if not thought or not action:
                 logger.warning(f"Failed to parse ReAct response at step {step_number}")
-                return "I'm having trouble understanding how to proceed. Please try rephrasing your question."
+                return "I'm having trouble understanding how to proceed. Please try rephrasing your question.", "No answer provided."
             
             # Log the reasoning step
-            logger.info(f"Step {step_number} - Thought: {thought[:100]}...")
+            logger.info(f"Step {step_number} - Thought: {thought[:150]}...")
             logger.info(f"Step {step_number} - Action: {action}")
-            logger.info(f"Step {step_number} - Action Input: {action_input[:100]}...")
             
             # Check if the agent wants to finish
             if action.lower() == "finish":
                 logger.info(f"Agent finished at step {step_number}")
-                return action_input
+                final_answer = action_input_dict.get("final_answer", "No answer provided.")
+                return thought, final_answer
             
             # Execute the action
-            observation = await self._execute_action(action, action_input)
+            observation = await self._execute_action(action, action_input_dict)
             
             # Store the step in memory
             react_step = ReActStep(
                 step_number=step_number,
                 thought=thought,
                 action=action,
-                action_input=action_input,
+                action_input=json.dumps(action_input_dict), # Store JSON string
                 observation=observation,
                 timestamp=datetime.now()
             )
@@ -191,7 +191,7 @@ Remember:
         
         # If we've reached max iterations without finishing
         logger.warning(f"ReAct loop reached max iterations ({self.max_iterations})")
-        return "I've reached my maximum number of reasoning steps. Let me provide the best answer I can based on what I've learned so far."
+        return "I've reached my maximum number of reasoning steps. Let me provide the best answer I can based on what I've learned so far.", "No answer provided."
 
     async def _get_llm_response(self, prompt: str) -> str:
         """Get a response from the LLM"""
@@ -218,54 +218,41 @@ Remember:
             logger.error(f"Error getting LLM response: {e}")
             return f"Error communicating with the reasoning engine: {str(e)}"
 
-    def _parse_react_response(self, response: str) -> Tuple[str, str, str]:
-        """Parse the LLM response to extract thought, action, and action input"""
+    def _parse_react_response(self, response: str) -> Tuple[str, str, dict]:
+        """Parse the LLM response to extract thought and the action JSON."""
         thought = ""
         action = ""
-        action_input = ""
+        action_input_dict = {}
         
         try:
             # Extract thought
-            thought_match = re.search(r"Thought:\s*(.*?)(?=\n(?:Action:|$))", response, re.DOTALL | re.IGNORECASE)
+            thought_match = re.search(r"Thought:\s*(.*?)(?=\nAction:|$)", response, re.DOTALL | re.IGNORECASE)
             if thought_match:
                 thought = thought_match.group(1).strip()
             
-            # Extract action
-            action_match = re.search(r"Action:\s*(.*?)(?=\n(?:Action Input:|$))", response, re.DOTALL | re.IGNORECASE)
+            # Extract the JSON block for the action
+            action_match = re.search(r"Action:\s*```json\n(.*?)\n```", response, re.DOTALL)
             if action_match:
-                action = action_match.group(1).strip()
-            
-            # Extract action input
-            action_input_match = re.search(r"Action Input:\s*(.*?)(?=\n(?:Observation:|$))", response, re.DOTALL | re.IGNORECASE)
-            if action_input_match:
-                action_input = action_input_match.group(1).strip()
+                action_json_str = action_match.group(1).strip()
+                action_data = json.loads(action_json_str)
+                action = action_data.get("tool_name", "")
+                action_input_dict = action_data.get("parameters", {})
             
         except Exception as e:
-            logger.error(f"Error parsing ReAct response: {e}")
+            logger.error(f"Error parsing ReAct JSON response: {e}")
             logger.debug(f"Response content: {response}")
         
-        return thought, action, action_input
+        return thought, action, action_input_dict
 
-    async def _execute_action(self, action: str, action_input: str) -> str:
-        """Execute the specified action with the given input"""
+    async def _execute_action(self, action: str, action_input_dict: dict) -> str:
+        """Execute the specified action with the given input dictionary."""
         try:
             # Check if it's a tool action
             if action in self.toolbox._tools:
-                logger.info(f"Executing tool: {action}")
-                
-                # Parse action input if it's JSON
-                try:
-                    if action_input.startswith('{') and action_input.endswith('}'):
-                        action_kwargs = json.loads(action_input)
-                    else:
-                        # If not JSON, treat as a single string argument
-                        action_kwargs = {"query": action_input}
-                except json.JSONDecodeError:
-                    # If JSON parsing fails, treat as string
-                    action_kwargs = {"query": action_input}
+                logger.info(f"Executing tool: {action} with params: {action_input_dict}")
                 
                 # Execute the tool
-                result = self.toolbox.execute_tool(action, context_manager=None, **action_kwargs)
+                result = self.toolbox.execute_tool(action, context_manager=None, **action_input_dict)
                 return f"Tool execution result: {result}"
             
             else:
@@ -288,8 +275,7 @@ Remember:
         # Add all previous steps
         for step in steps:
             prompt += f"Thought: {step.thought}\n"
-            prompt += f"Action: {step.action}\n"
-            prompt += f"Action Input: {step.action_input}\n"
+            prompt += f"Action:\n```json\n{step.action_input}\n```\n" # Display JSON action input
             prompt += f"Observation: {step.observation}\n\n"
         
         prompt += "Now, let's continue thinking step by step:"

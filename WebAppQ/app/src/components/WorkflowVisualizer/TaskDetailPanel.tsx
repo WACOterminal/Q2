@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Box, Typography, Tabs, Tab, Paper, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import { Box, Typography, Tabs, Tab, Paper, Dialog, DialogTitle, DialogContent, DialogActions, Button, Divider } from '@mui/material';
 import { TaskBlock, WorkflowTask } from '../../services/types'; // Assuming types are defined here
 import LogViewer from './LogViewer';
 
@@ -48,7 +48,23 @@ const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ task, open, onClose }
                             <Paper variant="outlined" sx={{ p: 2, mt: 1, whiteSpace: 'pre-wrap', maxHeight: '200px', overflow: 'auto' }}>
                                 {isWorkflowTask(task) ? task.prompt : 'N/A for this block type'}
                             </Paper>
-                            <Typography variant="h6" sx={{ mt: 2 }}>Result</Typography>
+                            <Divider sx={{ my: 2 }} />
+
+                            {task.thought && (
+                                <>
+                                    <Typography variant="h6" gutterBottom>
+                                        Agent's Thought Process
+                                    </Typography>
+                                    <Paper elevation={0} sx={{ p: 2, backgroundColor: '#f5f5f5', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                                        {task.thought}
+                                    </Paper>
+                                    <Divider sx={{ my: 2 }} />
+                                </>
+                            )}
+
+                            <Typography variant="h6" gutterBottom>
+                                Task Result
+                            </Typography>
                              <Paper variant="outlined" sx={{ p: 2, mt: 1, whiteSpace: 'pre-wrap', maxHeight: '200px', overflow: 'auto' }}>
                                 {isWorkflowTask(task) ? task.result || 'No result yet.' : 'N/A for this block type'}
                             </Paper>

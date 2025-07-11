@@ -6,19 +6,54 @@ import io
 import time
 import json
 import fastavro
+import structlog
 
 from agentQ.app.core.toolbox import Toolbox
-from agentQ.app.core.finops_tools import get_cloud_cost_report_tool, get_llm_usage_stats_tool, get_k8s_resource_utilization_tool
+from agentQ.app.core.context import ContextManager
+from agentQ.app.core.finops_tools import finops_tools
 from agentQ.app.core.prompts import FINOPS_PROMPT_TEMPLATE
 from pulsar.schema import AvroSchema
 from shared.q_messaging_schemas.schemas import PromptMessage, ResultMessage
 from agentQ.app.main import register_with_manager, react_loop
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger("finops_agent")
 
-AGENT_ID = "finops_agent"
+# --- Agent Definition ---
+AGENT_ID = "finops-agent-01"
 TASK_TOPIC = f"persistent://public/default/q.agentq.tasks.{AGENT_ID}"
 REGISTRATION_TOPIC = "persistent://public/default/q.managerq.agent.registrations"
+
+FINOPS_AGENT_SYSTEM_PROMPT = """
+You are a FinOps Analyst AI. Your mission is to monitor the platform's cloud and AI service expenditures to ensure financial efficiency.
+
+**Your Primary Workflow (Daily FinOps Scan):**
+
+1.  **Data Collection**: You will be prompted to begin the daily scan. Your first step is to use the provided tools to fetch the latest cost data. Use `get_cloud_spend` for infrastructure costs and `get_llm_usage_costs` for AI model costs.
+2.  **Analysis**: Once you have both reports, you must analyze them for anomalies. Your primary goal is to identify cost spikes. A service or model should be considered a spike if its cost is more than double the average of its peers in the same report.
+3.  **Reporting**: Synthesize your findings into a clear, concise markdown report. The report must include:
+    -   An "Overall Summary" with the total combined spend.
+    -   A "Potential Issues" section listing any cost spikes you identified.
+    -   A "Recommendation" for the team.
+
+Your analysis is crucial for maintaining the financial health of the platform.
+"""
+
+def setup_finops_agent(config: dict):
+    """
+    Initializes the toolbox and context manager for the FinOps agent.
+    """
+    logger.info("Setting up FinOps Agent", agent_id=AGENT_ID)
+    
+    toolbox = Toolbox()
+    
+    # Register all FinOps tools
+    for tool in finops_tools:
+        toolbox.register_tool(tool)
+    
+    context_manager = ContextManager(ignite_addresses=config['ignite']['addresses'], agent_id=AGENT_ID)
+    context_manager.connect()
+    
+    return toolbox, context_manager
 
 def run_finops_agent(pulsar_client, qpulse_client, llm_config, context_manager):
     """

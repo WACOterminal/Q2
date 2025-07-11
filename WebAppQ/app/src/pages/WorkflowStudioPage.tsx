@@ -1,31 +1,60 @@
-// WebAppQ/app/src/pages/WorkflowStudioPage.tsx
-import React, { useState, useCallback } from 'react';
-import { Container, Typography } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Box, Button, Typography, Paper } from '@mui/material';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { WorkflowBuilder } from '../components/Workflows/WorkflowBuilder';
-import { WorkflowTutorial } from '../components/Workflows/WorkflowTutorial';
-import { useLocation } from 'react-router-dom';
+import { GenerateWorkflowModal } from '../components/Workflows/GenerateWorkflowModal';
 
-export const WorkflowStudioPage: React.FC = () => {
-    const location = useLocation();
-    const [runTutorial, setRunTutorial] = useState(location.state?.startTutorial || false);
+const sampleYaml = `
+workflow_id: "wf_example"
+original_prompt: "An example workflow to demonstrate the studio."
+shared_context:
+  service_name: "example-service"
 
-    const handleJoyrideCallback = useCallback((data: any) => {
-        const { status } = data;
-        if (['finished', 'skipped'].includes(status)) {
-            setRunTutorial(false);
-        }
-    }, []);
+tasks:
+  - task_id: "example_task_1"
+    type: "task"
+    agent_personality: "default"
+    prompt: "This is the first task."
+    dependencies: []
+`.trim();
+
+export function WorkflowStudioPage() {
+    const [yamlContent, setYamlContent] = useState(sampleYaml);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const handleSave = (newYaml: string) => {
+        // In a real application, this would save the workflow to the backend
+        console.log("Saving workflow:", newYaml);
+        setYamlContent(newYaml);
+    };
+
+    const handleWorkflowGenerated = (generatedYaml: string) => {
+        setYamlContent(generatedYaml);
+        setIsModalOpen(false); // Close modal after generation
+    };
 
     return (
-        <Container maxWidth="xl" sx={{ mt: 4, height: 'calc(100vh - 100px)' }}>
-            <WorkflowTutorial run={runTutorial} callback={handleJoyrideCallback} />
-            <Typography variant="h4" gutterBottom>
-                Workflow Studio
-            </Typography>
-            <Typography paragraph color="text.secondary">
-                Design, build, and manage your automated workflows. Drag nodes from the sidebar onto the canvas to get started.
-            </Typography>
-            <WorkflowBuilder />
-        </Container>
+        <Box sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h4">
+                    Workflow Studio
+                </Typography>
+                <Button
+                    variant="contained"
+                    startIcon={<AutoAwesomeIcon />}
+                    onClick={() => setIsModalOpen(true)}
+                >
+                    Create with AI
+                </Button>
+            </Box>
+            
+            <WorkflowBuilder initialYaml={yamlContent} onSave={handleSave} />
+
+            <GenerateWorkflowModal
+                open={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onWorkflowGenerated={handleWorkflowGenerated}
+            />
+        </Box>
     );
-}; 
+} 

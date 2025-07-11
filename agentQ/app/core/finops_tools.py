@@ -1,64 +1,65 @@
 # agentQ/app/core/finops_tools.py
-import logging
-import boto3
-from agentQ.app.core.toolbox import Tool
+import structlog
 import json
+from datetime import datetime, timedelta
+import random
+from agentQ.app.core.toolbox import Tool
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
-def get_cloud_cost_report(time_period: str = "MONTHLY") -> str:
+def get_cloud_spend(config: dict = None) -> str:
     """
-    Retrieves a cost and usage report from the cloud provider (AWS).
+    Retrieves the current month-to-date cloud spend from the billing provider.
+    (This is a mock tool and returns generated data).
+    """
+    logger.info("Fetching mock cloud spend data.")
     
-    Args:
-        time_period (str): The time period for the report ('DAILY' or 'MONTHLY').
-        
-    Returns:
-        A JSON string of the cost report, or an error message.
-    """
-    # This is a placeholder. A real implementation would need robust
-    # error handling, pagination, and likely more specific filter parameters.
-    # It also requires AWS credentials to be configured in the environment.
-    logger.info(f"FinOps Tool: Getting {time_period} cost report from AWS.")
-    try:
-        ce = boto3.client('ce')
-        # ... logic to get cost and usage ...
-        return json.dumps({"status": "placeholder", "message": "AWS Cost Explorer results would be here."})
-    except Exception as e:
-        return f"Error connecting to AWS Cost Explorer: {e}"
+    # Simulate a breakdown of costs by service
+    services = ["QuantumPulse", "WebAppQ", "ManagerQ", "VectorStoreQ", "KnowledgeGraphQ"]
+    spend_data = {
+        "report_date": datetime.utcnow().isoformat(),
+        "total_spend_usd": round(random.uniform(5000, 7500), 2),
+        "spend_by_service": [
+            {"service": s, "cost_usd": round(random.uniform(800, 1500), 2)} for s in services
+        ]
+    }
+    # Add a random cost spike for the agent to find
+    spend_data["spend_by_service"][random.randint(0, len(services)-1)]["cost_usd"] *= 2.5 
 
-def get_llm_usage_stats() -> str:
-    """
-    Retrieves token usage statistics from the QuantumPulse service.
-    """
-    # This would call an endpoint on QuantumPulse that provides usage data.
-    logger.info("FinOps Tool: Getting LLM usage stats from QuantumPulse.")
-    return json.dumps({"status": "placeholder", "message": "LLM token usage data would be here."})
+    return json.dumps(spend_data, indent=2)
 
-def get_k8s_resource_utilization() -> str:
+def get_llm_usage_costs(config: dict = None) -> str:
     """
-    Retrieves a report of resource utilization (CPU/memory) for all services
-    from the observability platform (e.g., Prometheus).
+    Retrieves the current month-to-date LLM API usage costs.
+    (This is a mock tool and returns generated data).
     """
-    # This would query Prometheus or a similar monitoring system.
-    logger.info("FinOps Tool: Getting K8s resource utilization from Prometheus.")
-    return json.dumps({"status": "placeholder", "message": "K8s utilization data would be here."})
+    logger.info("Fetching mock LLM usage costs.")
+    
+    # Simulate a breakdown of costs by model
+    models = ["openai-gpt4", "anthropic-claude3-opus", "google-gemini-pro"]
+    cost_data = {
+        "report_date": datetime.utcnow().isoformat(),
+        "total_cost_usd": round(random.uniform(2000, 3000), 2),
+        "cost_by_model": [
+            {"model": m, "cost_usd": round(random.uniform(500, 1000), 2), "total_requests": random.randint(10000, 50000)} for m in models
+        ]
+    }
+    # Add a random cost spike for the agent to find
+    cost_data["cost_by_model"][random.randint(0, len(models)-1)]["cost_usd"] *= 3
+
+    return json.dumps(cost_data, indent=2)
 
 
-get_cloud_cost_report_tool = Tool(
-    name="get_cloud_cost_report",
-    description="Retrieves a cost and usage report from the cloud provider.",
-    func=get_cloud_cost_report
+cloud_spend_tool = Tool(
+    name="get_cloud_spend",
+    description="Retrieves the current month-to-date cloud spend, broken down by service.",
+    func=get_cloud_spend
 )
 
-get_llm_usage_stats_tool = Tool(
-    name="get_llm_usage_stats",
-    description="Retrieves token usage statistics from the QuantumPulse service.",
-    func=get_llm_usage_stats
+llm_usage_tool = Tool(
+    name="get_llm_usage_costs",
+    description="Retrieves the current month-to-date LLM API usage costs, broken down by model.",
+    func=get_llm_usage_costs
 )
 
-get_k8s_resource_utilization_tool = Tool(
-    name="get_k8s_resource_utilization",
-    description="Retrieves a report of K8s resource utilization.",
-    func=get_k8s_resource_utilization
-) 
+finops_tools = [cloud_spend_tool, llm_usage_tool] 

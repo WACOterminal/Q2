@@ -1,0 +1,34 @@
+workflow_id: "wf_predictive_scaling"
+original_prompt: "Proactively scale services based on CPU utilization forecasts."
+shared_context:
+  # The service to be analyzed. This could be parameterized in a more advanced setup.
+  service_name: "QuantumPulse" 
+  namespace: "q-platform"
+  # The CPU threshold that triggers a scale-up action.
+  scale_up_threshold_percent: 75.0
+  # The CPU threshold that triggers a scale-down action.
+  scale_down_threshold_percent: 25.0
+  # Look at the forecast for the next X hours
+  forecast_window_hours: 3
+
+tasks:
+  - task_id: "get_service_forecast"
+    type: "task"
+    agent_personality: "devops"
+    prompt: "Use the `get_load_forecast` tool to fetch the CPU utilization forecast for the '{{ shared_context.service_name }}' service."
+    
+  - task_id: "analyze_and_scale"
+    type: "task"
+    agent_personality: "devops"
+    prompt: |
+      You have been provided with the CPU forecast for the '{{ shared_context.service_name }}' service:
+      {{ tasks.get_service_forecast.result }}
+
+      Analyze the forecast for the next {{ shared_context.forecast_window_hours }} hours.
+      1. **Check for Scale-Up**: If any predicted CPU utilization in the window exceeds {{ shared_context.scale_up_threshold_percent }}%, you must scale up the service.
+      2. **Check for Scale-Down**: If the average predicted CPU utilization over the entire window is below {{ shared_context.scale_down_threshold_percent }}%, you should scale down the service.
+
+      If a scaling action is needed, use the `k8s_scale_deployment` tool. Increase replicas by 1 for a scale-up, and decrease by 1 for a scale-down (to a minimum of 1 replica).
+
+      If no action is needed, your final answer should state that "No scaling action required based on current forecast."
+    dependencies: ["get_service_forecast"] 

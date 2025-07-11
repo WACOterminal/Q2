@@ -171,7 +171,7 @@ class WorkflowExecutor:
             workflow_id = payload.get("workflow_id")
             task_id = payload.get("task_id")
             status_str = payload.get("status")
-            result = payload.get("result")
+            raw_result = payload.get("result") # Result is now a JSON string
 
             if not all([workflow_id, task_id, status_str]):
                 logger.error(f"Invalid status update message received: {payload}")
@@ -184,6 +184,17 @@ class WorkflowExecutor:
             })
             logger.info(f"Received status update for task {task_id}: {status_str}")
 
+            # New: Parse the structured result from the agent
+            thought = None
+            final_result = raw_result
+            if raw_result and isinstance(raw_result, str) and raw_result.strip().startswith('{'):
+                try:
+                    parsed_result = json.loads(raw_result)
+                    thought = parsed_result.get("thought")
+                    final_result = parsed_result.get("result", raw_result)
+                except json.JSONDecodeError:
+                    logger.warning("Could not parse task result as JSON, treating as raw string.", task_id=task_id)
+
             try:
                 status = TaskStatus(status_str) if status_str else None
             except ValueError:
@@ -193,14 +204,15 @@ class WorkflowExecutor:
             # NEW: Intercept failed status to trigger self-correction
             if status == TaskStatus.FAILED:
                 logger.warning(f"Task {task_id} in workflow {workflow_id} has failed. Initiating self-correction process.")
-                await self._handle_task_failure(workflow_id, task_id, result)
+                await self._handle_task_failure(workflow_id, task_id, final_result)
                 return # Stop normal processing for this failed task
 
             # Instrument task status metric
             if status and status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
                 TASK_COMPLETED_COUNTER.labels(status=status.value).inc()
 
-            workflow_manager.update_task_status(workflow_id, task_id, status, result)
+            # Update task with both thought and result
+            workflow_manager.update_task_status(workflow_id, task_id, status, final_result, thought)
 
             workflow = workflow_manager.get_workflow(workflow_id)
             if workflow and workflow.status == WorkflowStatus.RUNNING:

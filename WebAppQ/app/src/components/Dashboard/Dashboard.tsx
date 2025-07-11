@@ -11,6 +11,8 @@ import { ModelTestsWidget } from './ModelTestsWidget';
 import { RCAReportsWidget } from './RCAReportsWidget';
 import { SecurityScanWidget } from './SecurityScanWidget';
 import { QuantumRoutingWidget } from './QuantumRoutingWidget';
+import { FinOpsSummaryWidget } from './FinOpsSummaryWidget';
+import { PredictiveScalingWidget } from './PredictiveScalingWidget';
 
 interface Anomaly {
     id: string;
@@ -144,6 +146,14 @@ export const Dashboard: React.FC = () => {
                 </Grid>
                 <Grid item xs={12} lg={5}>
                     <QuantumRoutingWidget />
+                </Grid>
+
+                {/* Fourth Row */}
+                <Grid item xs={12} lg={7}>
+                    <FinOpsSummaryWidget />
+                </Grid>
+                <Grid item xs={12} lg={5}>
+                    <PredictiveScalingWidget />
                 </Grid>
             </Grid>
         </div>

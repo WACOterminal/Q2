@@ -63,6 +63,14 @@ from agentQ.app.core.devops_tools import (
     scale_deployment_tool
 )
 
+# --- NEW: Import advanced services ---
+from agentQ.app.services.multi_agent_coordinator import multi_agent_coordinator
+from agentQ.app.services.dynamic_agent_spawner import dynamic_agent_spawner
+from agentQ.app.services.cross_agent_knowledge_sharing import cross_agent_knowledge_sharing
+from agentQ.app.services.automated_incident_detection import automated_incident_detection
+from agentQ.app.services.auto_remediation_service import auto_remediation_service
+from agentQ.app.services.emerging_ai_monitoring import emerging_ai_monitoring
+
 # --- Reflector Agent ---
 REFLECTOR_AGENT_ID = "agentq-reflector-singleton"
 REFLECTOR_TASK_TOPIC = f"persistent://public/default/q.agentq.tasks.{REFLECTOR_AGENT_ID}"
@@ -422,6 +430,26 @@ def health_check():
 def run_health_server():
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
+# --- NEW: Background Service Management ---
+async def start_background_services():
+    """Initializes and starts all advanced background services."""
+    logger.info("Starting advanced background services...")
+    try:
+        # These services might have their own background loops
+        await asyncio.gather(
+            multi_agent_coordinator.initialize(),
+            dynamic_agent_spawner.initialize(),
+            cross_agent_knowledge_sharing.initialize(),
+            automated_incident_detection.initialize(),
+            auto_remediation_service.initialize(),
+            emerging_ai_monitoring.initialize()
+        )
+        logger.info("All advanced background services have been initialized.")
+    except Exception as e:
+        logger.error("Failed to start one or more background services", error=str(e), exc_info=True)
+        # Depending on the severity, we might want to exit the application
+        # For now, we log the error and continue.
+
 # --- Agent Setup ---
 
 def setup_default_agent(config: dict, vault_client: VaultClient):
@@ -672,6 +700,24 @@ def run_agent():
 
             # Start the new finops agent
             threading.Thread(target=run_finops_agent, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+
+            # Start the new multi-agent coordinator
+            threading.Thread(target=multi_agent_coordinator.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+
+            # Start the new dynamic agent spawner
+            threading.Thread(target=dynamic_agent_spawner.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+
+            # Start the new cross-agent knowledge sharing
+            threading.Thread(target=cross_agent_knowledge_sharing.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+
+            # Start the new automated incident detection
+            threading.Thread(target=automated_incident_detection.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+
+            # Start the new auto-remediation service
+            threading.Thread(target=auto_remediation_service.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
+
+            # Start the new emerging AI monitoring
+            threading.Thread(target=emerging_ai_monitoring.run, args=(pulsar_client, qpulse_client, llm_config, context_manager), daemon=True).start()
 
 
     except Exception as e:

@@ -60,6 +60,7 @@ class WorkflowTask(BaseModel):
     dependencies: List[str] = Field(default_factory=list, description="List of task_ids that must be completed before this one can start.")
     result: Optional[str] = None
     condition: Optional[str] = Field(None, description="A Jinja2 condition to evaluate before dispatching the task.")
+    thought: Optional[str] = None
 
 # --- NEW: Models for Conditional Logic ---
 

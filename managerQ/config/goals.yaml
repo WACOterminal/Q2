@@ -79,6 +79,32 @@
     type: "on_startup"
   remediation_workflow_id: "wf_quantum_llm_routing"
 
+- goal_id: "goal_finops_scan_on_startup"
+  objective: "Run a daily FinOps scan to monitor for cost anomalies."
+  is_active: true
+  trigger:
+    type: "on_startup" # In production, this would be a time-based trigger
+  remediation_workflow_id: "wf_finops_daily_scan"
+
+- goal_id: "goal_predictive_scaling_on_startup"
+  objective: "Proactively scale services based on load forecasts."
+  is_active: true
+  trigger:
+    type: "on_startup" # In production, this would be a time-based trigger (e.g., every 15 minutes)
+  remediation_workflow_id: "wf_predictive_scaling"
+
+- goal_id: "goal_zero_day_vulnerability_response"
+  objective: "A critical zero-day vulnerability has been announced for the 'log4j' library. Form a squad to assess our exposure, patch all affected services, and document the response."
+  is_active: true
+  trigger:
+    type: "on_startup" # This is for demonstration; in production, this would be triggered by an external event.
+  # This goal is intentionally routed to the planner agent, as it's too complex
+  # for a single, predefined workflow. The planner must form a squad.
+  remediation_workflow_id: "wf_delegate_to_planner" 
+  context_overrides:
+    # The planner agent receives this as its high-level prompt.
+    prompt: "A critical zero-day vulnerability has been announced for the 'log4j' library. Your task is to orchestrate a full response. This includes assessing which services use the library, coordinating a patch, and ensuring the incident is documented. You must form a multi-disciplinary squad to handle this."
+
 # --- Pre-defined Remediation Workflows ---
 # This is a conceptual representation of a workflow that would be loaded into Ignite.
 # ID: wf_auto_scale_service

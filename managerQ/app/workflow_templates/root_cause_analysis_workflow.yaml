@@ -50,14 +50,14 @@ tasks:
       2. **Logs**: {{ tasks.gather_logs.result }}
       3. **Kubernetes Events**: {{ tasks.gather_k8s_events.result }}
 
-      Analyze and correlate all of this information to determine the probable root cause of the issue.
+      Analyze and correlate all of this information to determine the probable root cause.
       Your analysis should be structured with the following sections:
       - **Summary**: A one-sentence summary of the probable root cause.
       - **Evidence**: A bulleted list of the key findings from metrics, logs, and events that support your conclusion.
       - **Recommendation**: A suggested next step for remediation.
 
       In addition to the markdown report, you MUST output a JSON object containing a `remediation_plan`.
-      The plan should have `tool_name` and `parameters`. For example:
+      The plan must have a `tool_name` and a `parameters` dictionary. For example:
       ```json
       {
         "remediation_plan": {
@@ -82,8 +82,10 @@ tasks:
     agent_personality: "devops"
     # This prompt uses the machine-readable output from the synthesis task
     prompt: |
-      The remediation plan has been approved.
-      Execute the tool `{{ tasks.synthesize_findings.result.remediation_plan.tool_name }}`
-      with the parameters `{{ tasks.synthesize_findings.result.remediation_plan.parameters }}`.
+      The remediation plan has been approved by a human operator.
+      You must now execute the specified tool with the provided parameters.
+      Tool Name: `{{ tasks.synthesize_findings.result.remediation_plan.tool_name }}`
+      Parameters: `{{ tasks.synthesize_findings.result.remediation_plan.parameters }}`
+      Use the appropriate tool to execute this plan.
     dependencies: ["request_remediation_approval"]
     condition: "{{ tasks.request_remediation_approval.result == 'approved' }}" 

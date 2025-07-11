@@ -1,0 +1,36 @@
+workflow_id: "wf_finops_daily_scan"
+original_prompt: "Perform the daily financial operations scan to identify cost anomalies and generate a summary report."
+shared_context: {}
+
+tasks:
+  - task_id: "fetch_cost_data"
+    type: "parallel"
+    tasks:
+      - task_id: "get_cloud_costs"
+        type: "task"
+        agent_personality: "finops_agent"
+        prompt: "Use the `get_cloud_spend` tool to fetch the latest cloud infrastructure cost report."
+      - task_id: "get_llm_costs"
+        type: "task"
+        agent_personality: "finops_agent"
+        prompt: "Use the `get_llm_usage_costs` tool to fetch the latest LLM API cost report."
+
+  - task_id: "analyze_and_report"
+    type: "task"
+    agent_personality: "finops_agent"
+    prompt: |
+      You have been provided with the latest cost data:
+      - Cloud Spend: {{ tasks.get_cloud_costs.result }}
+      - LLM Usage Costs: {{ tasks.get_llm_costs.result }}
+
+      Analyze both reports to identify potential financial issues. Your analysis should focus on:
+      1.  **Cost Spikes**: Identify any service or model whose cost is disproportionately high compared to the others. A service or model costing more than 2x the average of its peers should be flagged.
+      2.  **Total Spend**: Note the total combined spend from both reports.
+
+      Generate a concise markdown report with the following sections:
+      - **Overall Summary**: State the total cloud and LLM spend.
+      - **Potential Issues**: A bulleted list of any cost spikes you identified, including the service/model name and its cost.
+      - **Recommendation**: Suggest a general action, such as "Manual review of flagged service costs is recommended."
+      
+      If no significant issues are found, state that "No cost anomalies detected."
+    dependencies: ["fetch_cost_data"] 
