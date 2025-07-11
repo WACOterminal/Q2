@@ -114,6 +114,13 @@
     type: "on_startup"
   remediation_workflow_id: "wf_autonomous_venture_creation"
 
+- goal_id: "goal_proactive_assistance_on_startup"
+  objective: "Activate the Chief of Staff agent to provide proactive assistance to users."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_proactive_assistance"
+
 - goal_id: "goal_zero_day_vulnerability_response"
   objective: "A critical zero-day vulnerability has been announced for the 'log4j' library. Form a squad to assess our exposure, patch all affected services, and document the response."
   is_active: true

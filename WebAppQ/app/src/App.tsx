@@ -17,6 +17,7 @@ import GoalDetailPage from './pages/GoalDetailPage'; // Import the new Goal Deta
 import { GettingStartedPage } from './pages/GettingStartedPage';
 import Integrations from './pages/Integrations';
 import { DataSourcesPage } from './pages/DataSourcesPage';
+import { ProactiveSuggestionToast } from './components/common/ProactiveSuggestionToast'; // NEW
 
 function Home() {
   const authContext = useContext(AuthContext);
@@ -84,6 +85,7 @@ function App() {
           title={toast.title}
           message={toast.message}
       />
+      <ProactiveSuggestionToast /> {/* NEW */}
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>

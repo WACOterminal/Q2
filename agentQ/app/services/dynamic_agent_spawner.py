@@ -18,6 +18,8 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 import uuid
 import statistics
+import os
+from jinja2 import Environment, FileSystemLoader
 
 # Q Platform imports
 from shared.q_collaboration_schemas.models import ExpertiseArea
@@ -743,6 +745,67 @@ class DynamicAgentSpawner:
             for agent_id in decision["agents_to_terminate"]:
                 await self.terminate_agent(agent_id, "scaling_down")
     
+    async def create_agent_from_description(self, agent_name: str, system_prompt: str, required_tools: List[str]) -> Dict[str, Any]:
+        """
+        Dynamically generates and registers a new agent from a description.
+
+        Args:
+            agent_name (str): The name for the new agent (e.g., 'web_scraper_agent').
+            system_prompt (str): The core system prompt defining the agent's purpose.
+            required_tools (List[str]): A list of tool modules this agent needs.
+        
+        Returns:
+            A dictionary containing the new agent's ID and status.
+        """
+        logger.info("Dynamically creating new agent from description", agent_name=agent_name)
+        
+        try:
+            # 1. Prepare the rendering context
+            agent_id = f"generated-{agent_name}-{uuid.uuid4().hex[:4]}"
+            
+            # Convert tool names (e.g., 'collaboration_tool') to importable symbols
+            tool_imports = [f"from agentQ.app.core.{tool_name} import {tool_name}" for tool_name in required_tools]
+            tool_list = ", ".join(required_tools)
+
+            context = {
+                "agent_id": agent_id,
+                "agent_name": agent_name,
+                "system_prompt": system_prompt,
+                "tool_imports": "\n".join(tool_imports),
+                "tool_list": tool_list
+            }
+
+            # 2. Render the agent file from a template
+            env = Environment(loader=FileSystemLoader("agentQ/job_templates/")) # Assuming a template dir
+            template = env.get_template("generic_agent_template.py.j2")
+            agent_code = template.render(context)
+            
+            # 3. Write the new agent file
+            # In a real system, this would be written to a shared volume or committed to git
+            target_dir = "agentQ/generated_agents"
+            os.makedirs(target_dir, exist_ok=True)
+            file_path = os.path.join(target_dir, f"{agent_name}.py")
+            with open(file_path, "w") as f:
+                f.write(agent_code)
+            
+            logger.info("New agent file created", path=file_path)
+
+            # 4. Trigger registration/reload
+            # This is a conceptual step. In a real K8s environment, this might involve:
+            # - Committing the new agent file to git, triggering a CI/CD pipeline.
+            # - Using a client to tell a running managerQ to dynamically load the new agent module.
+            # - Sending a Pulsar message to a "SystemManager" that handles new code deployment.
+            
+            return {
+                "status": "AGENT_CREATED",
+                "agent_id": agent_id,
+                "message": f"Agent {agent_name} created successfully. A system restart or dynamic reload is required to activate it."
+            }
+
+        except Exception as e:
+            logger.error("Failed to create agent from description", exc_info=True)
+            return {"status": "ERROR", "message": str(e)}
+
     # ===== PLACEHOLDER METHODS =====
     
     async def _load_agent_templates(self):

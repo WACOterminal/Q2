@@ -1,0 +1,21 @@
+workflow_id: "wf_proactive_assistance"
+original_prompt: "Activate the Chief of Staff agent to continuously monitor user activity and proactively offer assistance."
+shared_context:
+  # The user this instance of the workflow is assigned to.
+  # In a multi-user system, a new instance of this workflow would run for each user.
+  target_user_id: "default_user"
+
+tasks:
+  - task_id: "begin_proactive_assistance"
+    type: "task"
+    agent_personality: "chief_of_staff"
+    prompt: |
+      Your mission is to serve as the proactive, symbiotic partner to user '{{ shared_context.target_user_id }}'.
+
+      You must now begin your core cognitive loop:
+      1.  **Observe**: Listen to the user action stream.
+      2.  **Analyze**: Identify patterns of repetition or inefficiency.
+      3.  **Propose**: When an opportunity for automation is found, use the `propose_assistance` tool to offer help.
+      
+      This is a continuous, long-running task. Your goal is not to finish, but to perpetually serve. Begin.
+    dependencies: [] 

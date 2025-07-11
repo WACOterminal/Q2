@@ -1,0 +1,40 @@
+workflow_id: "wf_cognitive_psychology_review"
+original_prompt: "Perform a meta-cognitive analysis of an agent's reasoning to identify and suggest improvements."
+shared_context:
+  # The agent personality to analyze
+  target_personality: "devops"
+
+tasks:
+  - task_id: "get_thought_history"
+    type: "task"
+    agent_personality: "chief_scientist"
+    prompt: "Use the `get_agent_thought_history` tool to retrieve the recent reasoning history for the '{{ shared_context.target_personality }}' agent personality."
+    dependencies: []
+
+  - task_id: "analyze_and_suggest_enhancement"
+    type: "task"
+    agent_personality: "chief_scientist"
+    prompt: |
+      You have been provided with the recent thought history of the '{{ shared_context.target_personality }}' agent:
+      {{ tasks.get_thought_history.result }}
+
+      Analyze this history to identify flawed reasoning patterns or cognitive inefficiencies. Look for repeated errors, missed opportunities, or inefficient tool usage.
+
+      Your task is to formulate a "Cognitive Enhancement". This should be a specific, actionable recommendation for how to improve the agent's system prompt to correct the identified flaw.
+
+      Your final answer must be a JSON object with two fields:
+      1. `cognitive_flaw_summary`: A concise description of the flaw you identified.
+      2. `prompt_enhancement_suggestion`: The specific text to be added to or changed in the target agent's system prompt to fix the flaw.
+    dependencies: ["get_thought_history"]
+
+  - task_id: "propose_self_modification"
+    type: "task"
+    agent_personality: "chief_scientist"
+    prompt: |
+      You have formulated a cognitive enhancement. Now, you must formally propose this change.
+      Use the `propose_prompt_update` tool with the following parameters:
+      - `agent_personality`: "{{ shared_context.target_personality }}"
+      - `new_prompt_suggestion`: "{{ tasks.analyze_and_suggest_enhancement.result.prompt_enhancement_suggestion }}"
+      
+      Your final answer is the confirmation from the tool.
+    dependencies: ["analyze_and_suggest_enhancement"] 

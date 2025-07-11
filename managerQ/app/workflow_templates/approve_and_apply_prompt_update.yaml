@@ -1,0 +1,34 @@
+workflow_id: "wf_approve_and_apply_prompt_update"
+original_prompt: "Review and approve a proposed modification to an agent's core system prompt."
+shared_context:
+  # These values are injected by the `propose_prompt_update` tool
+  target_personality: "unknown_agent"
+  suggestion: "No suggestion provided."
+  requester_agent: "unknown_requester"
+
+tasks:
+  - task_id: "human_approval_for_prompt_update"
+    type: "approval"
+    # This message is displayed to the human operator on the Approvals page.
+    message: |
+      The '{{ shared_context.requester_agent }}' has proposed a cognitive enhancement
+      for the '{{ shared_context.target_personality }}' agent.
+      
+      **Proposed Change:**
+      "{{ shared_context.suggestion }}"
+      
+      Approve this change to update the agent's core system prompt. This is a high-privilege action.
+    dependencies: []
+    required_roles: ["lead_architect", "system_admin"]
+
+  # In a real system, a subsequent task would run only upon approval.
+  # This task would be responsible for reading the agent's Python file,
+  # replacing the system prompt constant, and potentially triggering a
+  # rolling restart of the agent service to apply the change.
+  #
+  # - task_id: "apply_prompt_change"
+  #   type: "task"
+  #   agent_personality: "devops"
+  #   prompt: "Apply the approved prompt change for '{{ shared_context.target_personality }}'."
+  #   dependencies: ["human_approval_for_prompt_update"]
+  #   condition: "{{ tasks.human_approval_for_prompt_update.result == 'approved' }}" 

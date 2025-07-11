@@ -17,6 +17,7 @@ from app.services.ignite_client import ignite_client
 from app.services.h2m_pulsar import h2m_pulsar_client
 from app.core.thought_listener import thought_listener
 from app.core.copilot_handler import copilot_handler
+from app.core.observer_service import ObserverService
 from shared.observability.logging_config import setup_logging
 from shared.observability.metrics import setup_metrics
 from shared.opentelemetry.tracing import setup_tracing
@@ -44,7 +45,10 @@ async def startup_event():
         await ignite_client.connect()
         h2m_pulsar_client.start_producers()
         
-        # --- NEW: Initialize and start the CoPilotHandler ---
+        # --- Initialize services that depend on the pulsar client ---
+        global observer_service
+        observer_service = ObserverService(h2m_pulsar_client.client)
+        
         copilot_handler.client = h2m_pulsar_client.client
         copilot_handler.start()
         
@@ -79,6 +83,15 @@ async def copilot_websocket_endpoint(websocket: WebSocket, conversation_id: str)
     except WebSocketDisconnect:
         copilot_handler.unregister_session(conversation_id)
         logger.info(f"Client disconnected from co-pilot session: {conversation_id}")
+
+# --- NEW: Observer WebSocket Endpoint ---
+@app.websocket("/api/v1/observer/ws/{user_id}")
+async def observer_websocket_endpoint(websocket: WebSocket, user_id: str):
+    """Handles the observer WebSocket connection for a specific user."""
+    if not observer_service:
+        logger.error("Observer service not initialized.")
+        return
+    await observer_service.handle_connection(websocket, user_id)
 
 
 @app.get("/health", tags=["Health"])
