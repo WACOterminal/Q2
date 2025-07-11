@@ -13,6 +13,10 @@
 #include <AzFramework/Entity/EntityContextBus.h>
 #include <AzFramework/Entity/GameEntityContextBus.h>
 #include <AzFramework/Render/GeometryIntersectionBus.h>
+#include <O3DE/Entity/Entity.h>
+#include <O3DE/Transform/TransformBus.h>
+#include <O3DE/Render/MeshComponentBus.h>
+#include <O3DE/Render/MaterialAsset.h>
 
 #ifdef EMSCRIPTEN
 #include <emscripten/emscripten.h>

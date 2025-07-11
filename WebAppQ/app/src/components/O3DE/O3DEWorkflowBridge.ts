@@ -1,5 +1,130 @@
 import { EventEmitter } from 'events';
 import { Workflow, TaskBlock } from '../../services/types';
+import { produce } from 'immer';
+
+// --- Data Structures ---
+export interface Vector3 { x: number; y: number; z: number; }
+export interface Node {
+    id: string;
+    label: string;
+    type: string;
+    parent?: string;
+    state: string;
+    position: Vector3;
+    metadata: Record<string, any>;
+}
+export interface Link {
+    id: string;
+    source: string;
+    target:string;
+    state: string;
+}
+
+export interface WorldState {
+    nodes: Record<string, Node>;
+    links: Record<string, Link>;
+}
+
+type WorldUpdateCallback = (state: WorldState) => void;
+
+// --- O3DE Workflow Bridge ---
+class O3DEWorkflowBridge {
+    private ws: WebSocket | null = null;
+    private worldState: WorldState = { nodes: {}, links: {} };
+    private onUpdateCallback: WorldUpdateCallback | null = null;
+
+    public connect(url: string) {
+        if (this.ws) {
+            console.log("WebSocket already connected.");
+            return;
+        }
+
+        console.log(`Connecting to WebSocket at ${url}...`);
+        this.ws = new WebSocket(url);
+
+        this.ws.onopen = () => {
+            console.log("WebSocket connection established.");
+        };
+
+        this.ws.onmessage = (event) => {
+            this.handleMessage(event.data);
+        };
+
+        this.ws.onerror = (error) => {
+            console.error("WebSocket error:", error);
+        };
+
+        this.ws.onclose = () => {
+            console.log("WebSocket connection closed.");
+            this.ws = null;
+            // Optional: Implement reconnection logic here
+        };
+    }
+
+    public disconnect() {
+        if (this.ws) {
+            this.ws.close();
+        }
+    }
+
+    public onUpdate(callback: WorldUpdateCallback) {
+        this.onUpdateCallback = callback;
+    }
+
+    private handleMessage(data: string) {
+        try {
+            const message = JSON.parse(data);
+            let stateChanged = false;
+
+            switch (message.type) {
+                case "SNAPSHOT":
+                    this.worldState = { nodes: {}, links: {} }; // Reset state
+                    message.payload.nodes.forEach((node: Node) => {
+                        this.worldState.nodes[node.id] = node;
+                    });
+                    message.payload.links.forEach((link: Link) => {
+                        this.worldState.links[link.id] = link;
+                    });
+                    stateChanged = true;
+                    break;
+                
+                case "TICK":
+                    this.worldState = produce(this.worldState, draftState => {
+                        message.payload.forEach((event: any) => {
+                            switch(event.event_type) {
+                                case "NODE_CREATED":
+                                    draftState.nodes[event.data.id] = event.data;
+                                    break;
+                                case "LINK_CREATED":
+                                    draftState.links[event.data.id] = event.data;
+                                    break;
+                                case "NODE_STATE_CHANGED":
+                                    if (draftState.nodes[event.data.id]) {
+                                        draftState.nodes[event.data.id].state = event.data.state;
+                                    }
+                                    break;
+                                case "LINK_PULSE":
+                                    // This is a transient event, can be handled by the visualizer
+                                    // Or we can add temporary links to the state
+                                    break;
+                            }
+                        });
+                    });
+                    stateChanged = true;
+                    break;
+            }
+
+            if (stateChanged && this.onUpdateCallback) {
+                this.onUpdateCallback(this.worldState);
+            }
+        } catch (error) {
+            console.error("Failed to parse WebSocket message:", error);
+        }
+    }
+}
+
+// Singleton instance of the bridge
+export const workflowBridge = new O3DEWorkflowBridge();
 
 // O3DE WebAssembly module interface
 interface O3DEModule {
@@ -53,12 +178,6 @@ export enum QualityLevel {
   Medium = 1,
   High = 2,
   Ultra = 3
-}
-
-export interface Vector3 {
-  x: number;
-  y: number;
-  z: number;
 }
 
 export interface UserPresence {
