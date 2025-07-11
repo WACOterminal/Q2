@@ -30,3 +30,6 @@ opentelemetry-sdk
 opentelemetry-instrumentation-fastapi
 prometheus-client
 structlog
+
+# HTTP client for API calls
+httpx
