@@ -34,6 +34,7 @@ kubernetes
 flake8
 semgrep
 watchfiles
+bandit
 
 # Quantum Computing Libraries
 # qiskit>=0.45.0

@@ -9,6 +9,8 @@ import { AgentPerformanceWidget } from './AgentPerformanceWidget';
 import { WorkflowAnalyticsWidget } from './WorkflowAnalyticsWidget';
 import { ModelTestsWidget } from './ModelTestsWidget';
 import { RCAReportsWidget } from './RCAReportsWidget';
+import { SecurityScanWidget } from './SecurityScanWidget';
+import { QuantumRoutingWidget } from './QuantumRoutingWidget';
 
 interface Anomaly {
     id: string;
@@ -124,10 +126,10 @@ export const Dashboard: React.FC = () => {
             </div>
             <Grid container spacing={3}>
                 {/* First Row */}
-                <Grid item xs={12} md={8}>
+                <Grid item xs={12} md={8} lg={9}>
                     <ActiveWorkflowsWidget />
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={4} lg={3}>
                     <AgentPerformanceWidget />
                 </Grid>
 
@@ -137,11 +139,11 @@ export const Dashboard: React.FC = () => {
                 </Grid>
 
                 {/* Third Row */}
-                <Grid item xs={12} md={6}>
-                    <WorkflowAnalyticsWidget />
+                <Grid item xs={12} lg={7}>
+                    <SecurityScanWidget />
                 </Grid>
-                <Grid item xs={12} md={6}>
-                    <ModelTestsWidget />
+                <Grid item xs={12} lg={5}>
+                    <QuantumRoutingWidget />
                 </Grid>
             </Grid>
         </div>

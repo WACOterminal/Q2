@@ -1,0 +1,25 @@
+workflow_id: "wf_quantum_llm_routing"
+original_prompt: "Determine the optimal LLM provider by balancing cost and latency using a quantum algorithm."
+shared_context:
+  # This data represents the available LLM providers and their performance metrics.
+  # In a real system, this might be fetched dynamically.
+  providers_json: >
+    [
+      {"name": "openai-gpt4", "cost_per_1k_tokens": 0.03, "p90_latency_ms": 1200},
+      {"name": "anthropic-claude3-opus", "cost_per_1k_tokens": 0.025, "p90_latency_ms": 950},
+      {"name": "google-gemini-pro", "cost_per_1k_tokens": 0.01, "p90_latency_ms": 1500},
+      {"name": "meta-llama3-70b", "cost_per_1k_tokens": 0.02, "p90_latency_ms": 800}
+    ]
+
+tasks:
+  - task_id: "find_optimal_route"
+    type: "task"
+    agent_personality: "quantum_analyst"
+    prompt: |
+      You have been tasked with optimizing our LLM provider routing.
+      Use the `solve_llm_routing_problem` tool with the following provider data:
+      
+      {{ shared_context.providers_json }}
+      
+      Your final answer must be the unmodified JSON output from the tool.
+    dependencies: [] 

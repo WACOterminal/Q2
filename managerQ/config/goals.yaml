@@ -65,6 +65,20 @@
     type: "on_startup"
   remediation_workflow_id: "wf_ast_refactor_and_lint"
 
+- goal_id: "goal_security_scan_on_startup"
+  objective: "Run a comprehensive SAST scan on all service codebases at startup."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_security_code_scan"
+
+- goal_id: "goal_quantum_routing_on_startup"
+  objective: "Optimize LLM provider routing by running the quantum optimization workflow at startup."
+  is_active: true
+  trigger:
+    type: "on_startup"
+  remediation_workflow_id: "wf_quantum_llm_routing"
+
 # --- Pre-defined Remediation Workflows ---
 # This is a conceptual representation of a workflow that would be loaded into Ignite.
 # ID: wf_auto_scale_service

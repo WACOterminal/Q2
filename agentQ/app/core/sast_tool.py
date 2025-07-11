@@ -1,61 +1,64 @@
 # agentQ/app/core/sast_tool.py
-import json
 import subprocess
-from typing import List, Dict, Any
-
+import json
+import structlog
+from pathlib import Path
 from agentQ.app.core.toolbox import Tool
 
-def static_analysis_security_tool_func(path: str) -> Dict[str, Any]:
+logger = structlog.get_logger(__name__)
+
+def sast_scan_directory(directory_path: str, config: dict = None) -> str:
     """
-    Runs a static analysis security scan on the specified file or directory path using Semgrep.
-    The tool captures the findings and returns them in a structured JSON format.
-    Only use this tool on a specific directory, not the whole codebase.
-    For example, `app/` or `tests/`.
+    Performs a Static Application Security Test (SAST) scan on a directory using the 'bandit' tool.
 
     Args:
-        path (str): The path to the file or directory to scan.
+        directory_path (str): The absolute path to the directory to scan.
 
     Returns:
-        Dict[str, Any]: A dictionary containing the scan results.
+        str: A JSON string of the scan results, or an error message.
     """
+    target_path = Path(directory_path)
+    if not target_path.is_dir():
+        return f"Error: The provided path '{directory_path}' is not a valid directory."
+
+    logger.info("Running SAST scan on directory", path=str(target_path))
+
+    # Command to run bandit and get JSON output
+    # -r: recursive, -f: format (json)
+    command = [
+        "bandit",
+        "-r",
+        str(target_path),
+        "-f",
+        "json",
+        "-c",
+        "/app/bandit.yaml" # Assuming a custom config file is mounted in the container
+    ]
+
     try:
-        # The `--json` flag tells semgrep to output results in JSON format.
-        # The `--config "auto"` flag tells semgrep to automatically select the best rules to run.
-        command = ["semgrep", "scan", "--json", "--config", "auto", path]
-        
-        # We use subprocess.run to execute the command.
-        # `capture_output=True` captures stdout and stderr.
-        # `text=True` decodes stdout/stderr as text.
-        # `check=True` raises a CalledProcessError if the command returns a non-zero exit code.
         result = subprocess.run(
             command,
             capture_output=True,
             text=True,
-            check=True
+            check=False # Do not throw exception on non-zero exit code
         )
-        
-        # The JSON output from semgrep is a string, so we parse it into a Python dictionary.
-        return json.loads(result.stdout)
-    
-    except FileNotFoundError:
-        return {"error": "Semgrep not found. Make sure it is installed and in the system's PATH."}
-    except subprocess.CalledProcessError as e:
-        # If semgrep returns a non-zero exit code, it might indicate an error during the scan.
-        return {
-            "error": "Semgrep scan failed.",
-            "stdout": e.stdout,
-            "stderr": e.stderr
-        }
-    except json.JSONDecodeError:
-        # This might happen if the output is not valid JSON for some reason.
-        return {"error": "Failed to parse Semgrep JSON output."}
-    except Exception as e:
-        # Catch any other unexpected errors.
-        return {"error": f"An unexpected error occurred: {str(e)}"}
 
-# --- Tool Registration ---
-static_analysis_security_tool = Tool(
-    name="static_analysis_security_tool",
-    description="Runs a static analysis security scan on the specified file or directory path using Semgrep. The tool captures the findings and returns them in a structured JSON format. Only use this tool on a specific directory, not the whole codebase. For example, `app/` or `tests/`.",
-    func=static_analysis_security_tool_func
+        if result.returncode not in [0, 1]: # Bandit exits 1 if issues are found, 0 if not.
+            logger.error("Bandit scan failed", stderr=result.stderr)
+            return f"Error: Bandit scan failed with exit code {result.returncode}. Stderr: {result.stderr}"
+
+        # Bandit outputs JSON with results and potential errors
+        return result.stdout
+
+    except FileNotFoundError:
+        logger.error("Bandit command not found. Is it installed in the environment?")
+        return "Error: 'bandit' command not found. Please ensure it is installed."
+    except Exception as e:
+        logger.error("An unexpected error occurred during SAST scan", exc_info=True)
+        return f"Error: An unexpected error occurred: {e}"
+
+sast_tool = Tool(
+    name="sast_scan_directory",
+    description="Performs a SAST scan on a given directory using bandit and returns a JSON report of vulnerabilities.",
+    func=sast_scan_directory,
 ) 

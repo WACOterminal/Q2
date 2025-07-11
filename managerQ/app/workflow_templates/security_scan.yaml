@@ -1,0 +1,39 @@
+workflow_id: "wf_security_code_scan"
+original_prompt: "Perform a comprehensive SAST scan across all critical service codebases and report any high-severity findings."
+shared_context:
+  # Define the target directories for the scan
+  services_to_scan:
+    - "agentQ"
+    - "managerQ"
+    - "H2M"
+    - "QuantumPulse"
+    - "UserProfileQ"
+    - "VectorStoreQ"
+    - "KnowledgeGraphQ"
+    - "IntegrationHub"
+
+tasks:
+  - task_id: "scan_codebases"
+    type: "parallel"
+    # This will run the 'sast_scan_directory' tool for each item in the services_to_scan list.
+    # The agent executing this needs to understand how to iterate and call the tool.
+    for_each: "{{ shared_context.services_to_scan }}"
+    agent_personality: "security_analyst"
+    prompt: |
+      For each service in the list `{{ shared_context.services_to_scan }}`, execute the `sast_scan_directory` tool.
+      The directory path should be `/app/{{ item }}`.
+      Aggregate the JSON results from all scans into a single list.
+    
+  - task_id: "triage_and_report"
+    type: "task"
+    agent_personality: "security_analyst"
+    prompt: |
+      You have been provided with a list of SAST scan results from multiple services:
+      {{ tasks.scan_codebases.result }}
+      
+      Your task is to:
+      1. **Analyze the results**: Parse the JSON output and identify all vulnerabilities with a `severity` of `HIGH`.
+      2. **Filter out false positives**: Ignore any findings related to the use of `subprocess` or `httpx` as these are known and accepted risks in this context.
+      3. **Create Tickets**: For each valid, high-severity vulnerability, use the `openproject_create_ticket` tool. The ticket title should be `SAST Finding: [Vulnerability Name] in [File Path]`. The description should include the full JSON object for the finding.
+      4. **Summarize**: Produce a final summary report of the tickets you have created. If no high-severity issues were found, state that clearly.
+    dependencies: ["scan_codebases"] 

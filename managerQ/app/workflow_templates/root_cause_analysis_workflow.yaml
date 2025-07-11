@@ -55,6 +55,35 @@ tasks:
       - **Summary**: A one-sentence summary of the probable root cause.
       - **Evidence**: A bulleted list of the key findings from metrics, logs, and events that support your conclusion.
       - **Recommendation**: A suggested next step for remediation.
-      
-      Present the final report as a clean, well-formatted markdown document.
-    dependencies: ["gather_metrics", "gather_logs", "gather_k8s_events"] 
+
+      In addition to the markdown report, you MUST output a JSON object containing a `remediation_plan`.
+      The plan should have `tool_name` and `parameters`. For example:
+      ```json
+      {
+        "remediation_plan": {
+          "tool_name": "k8s_restart_deployment",
+          "parameters": {
+            "service_name": "{{ shared_context.service_name }}",
+            "namespace": "{{ shared_context.namespace }}"
+          }
+        }
+      }
+      ```
+    dependencies: ["gather_metrics", "gather_logs", "gather_k8s_events"]
+
+  - task_id: "request_remediation_approval"
+    type: "approval"
+    message: "The AIOps system has diagnosed an issue with the '{{ shared_context.service_name }}' service and recommends the following action: `{{ tasks.synthesize_findings.result.remediation_plan.tool_name }}`. Please approve or reject this plan."
+    dependencies: ["synthesize_findings"]
+    required_roles: ["sre", "lead_dev"]
+
+  - task_id: "execute_remediation"
+    type: "task"
+    agent_personality: "devops"
+    # This prompt uses the machine-readable output from the synthesis task
+    prompt: |
+      The remediation plan has been approved.
+      Execute the tool `{{ tasks.synthesize_findings.result.remediation_plan.tool_name }}`
+      with the parameters `{{ tasks.synthesize_findings.result.remediation_plan.parameters }}`.
+    dependencies: ["request_remediation_approval"]
+    condition: "{{ tasks.request_remediation_approval.result == 'approved' }}" 
