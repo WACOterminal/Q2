@@ -1,0 +1,25 @@
+workflow_id: "wf_qgan_data_generation"
+original_prompt: "Train a Quantum Generative Adversarial Network on the sample dataset and use it to generate 100 new data points."
+shared_context:
+  # The ID of the dataset to learn from. This is one of the sample datasets
+  # created by the QuantumMLExperimentsService on initialization.
+  dataset_id: "Sample Binary Classification"
+  num_samples_to_generate: 100
+
+tasks:
+  - task_id: "train_the_qgan"
+    type: "task"
+    agent_personality: "quantum_ml"
+    prompt: "You must train a QGAN model on the dataset with ID: '{{ shared_context.dataset_id }}'. Use the `train_qgan_model` tool."
+    dependencies: []
+
+  - task_id: "generate_the_samples"
+    type: "task"
+    agent_personality: "quantum_ml"
+    prompt: |
+      The QGAN model has been trained successfully.
+      The training result, which contains the new model_id, is: {{ tasks.train_the_qgan.result }}
+      
+      You must now use the `generate_qgan_samples` tool to generate {{ shared_context.num_samples_to_generate }} new data points.
+      Extract the `best_model_id` from the previous step's result to use as the `model_id` parameter.
+    dependencies: ["train_the_qgan"] 

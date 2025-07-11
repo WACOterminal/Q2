@@ -134,6 +134,48 @@ class ObservabilityManager:
             comm_link = Link(source_id=source, target_id=target)
             events.append({"event_type": "LINK_PULSE", "data": {"id": comm_link.id, "source": source, "target": target}})
 
+        # --- NEW: Simulate Swarm Intelligence Events ---
+        if "logistics_swarm" in self._world_state and random.random() < 0.8:
+            # 1. Simulate pheromone trail updates (for ACO)
+            # In a real system, this would be a grid of values. We'll simulate a few points.
+            pheromone_event = {
+                "event_type": "PHEROMONE_UPDATE",
+                "data": {
+                    "trail_id": "route_A",
+                    "points": [
+                        {"x": random.uniform(-40, 40), "y": random.uniform(-40, 40), "intensity": random.random()},
+                        {"x": random.uniform(-40, 40), "y": random.uniform(-40, 40), "intensity": random.random()},
+                    ]
+                }
+            }
+            events.append(pheromone_event)
+            
+            # 2. Simulate bee agent targeting a solution (for PSO)
+            bee_agents = [n.id for n in self._world_state.values() if "bee" in n.label]
+            if bee_agents:
+                target_solution_id = random.choice(list(self._world_state.keys())) # Target a random node
+                bee_agent_id = random.choice(bee_agents)
+                target_event = {
+                    "event_type": "AGENT_TARGET_CHANGED",
+                    "data": {
+                        "agent_id": bee_agent_id,
+                        "target_id": target_solution_id
+                    }
+                }
+                events.append(target_event)
+        
+        # Create the swarm for the first time
+        elif "logistics_swarm" not in self._world_state:
+             swarm_node = Node(id="logistics_swarm", label="Drone Swarm", node_type="swarm")
+             self._world_state["logistics_swarm"] = swarm_node
+             events.append({"event_type": "NODE_CREATED", "data": swarm_node.__dict__})
+             # Create a few "bee" agents in the swarm
+             for i in range(5):
+                 bee_id = f"bee_agent_{i}"
+                 bee_node = Node(id=bee_id, label=f"Bee-{i}", node_type="agent", parent="logistics_swarm")
+                 self._world_state[bee_id] = bee_node
+                 events.append({"event_type": "NODE_CREATED", "data": bee_node.__dict__})
+        
         return events
 
     async def broadcast(self, data: dict):

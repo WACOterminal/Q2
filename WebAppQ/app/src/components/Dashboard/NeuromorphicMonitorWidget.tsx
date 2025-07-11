@@ -2,6 +2,28 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import BoltIcon from '@mui/icons-material/Bolt';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+
+const SpikeTrain = ({ spikes }: { spikes: any[] }) => {
+    return (
+        <Box height={100} bgcolor="#222" my={2} p={1} sx={{ overflow: 'hidden', position: 'relative' }}>
+            {spikes.map((spike, i) => (
+                <Box 
+                    key={i} 
+                    sx={{ 
+                        position: 'absolute', 
+                        bottom: `${Math.random() * 90}%`, 
+                        left: `${(spike.time - (Date.now() - 5000)) / 50}%`,
+                        width: '2px', 
+                        height: '10px', 
+                        bgcolor: 'primary.main',
+                        opacity: spike.intensity,
+                    }}
+                />
+            ))}
+        </Box>
+    );
+};
 
 // Mock data stream hook
 const useMockMarketData = (callback: (data: any) => void) => {
@@ -24,6 +46,7 @@ export function NeuromorphicMonitorWidget() {
     const [marketData, setMarketData] = useState<any[]>([]);
     const [spikeTrain, setSpikeTrain] = useState<any[]>([]);
     const [anomaly, setAnomaly] = useState<any>(null);
+    const [avgWeight, setAvgWeight] = useState(0.5);
 
     const dataCallback = (data: any) => {
         setMarketData(prev => [...prev.slice(-50), data]);
@@ -36,6 +59,14 @@ export function NeuromorphicMonitorWidget() {
     };
     
     useMockMarketData(dataCallback);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // Simulate STDP learning by slowly changing the average weight
+            setAvgWeight(w => Math.min(1.0, Math.max(0.1, w + (Math.random() - 0.5) * 0.01)));
+        }, 200);
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <Card sx={{ height: '100%' }}>
@@ -53,12 +84,24 @@ export function NeuromorphicMonitorWidget() {
                     {/* Spike train visualization would go here */}
                     <Typography p={1} color="textSecondary" variant="caption">Spike Train Visualization Area</Typography>
                 </Box>
+                
+                <SpikeTrain spikes={spikeTrain} />
+                
                 {anomaly && <Chip label={`Anomaly: ${anomaly.text}`} color="error" />}
-                 <Box display="flex" alignItems="center" mt={2}>
-                    <BoltIcon color="success" />
-                    <Typography variant="body2" ml={1}>
-                        SNN Energy Usage: 0.02 µJ/inf | Classical Model Est: 25 µJ/inf (1250x more)
-                    </Typography>
+                 
+                <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
+                    <Box display="flex" alignItems="center">
+                        <BoltIcon color="success" />
+                        <Typography variant="body2" ml={1}>
+                            SNN Energy Usage: 0.02 µJ/inf
+                        </Typography>
+                    </Box>
+                    <Box display="flex" alignItems="center">
+                        <PsychologyIcon color="secondary" />
+                        <Typography variant="body2" ml={1}>
+                            Avg. Synaptic Weight: {avgWeight.toFixed(3)}
+                        </Typography>
+                    </Box>
                 </Box>
             </CardContent>
         </Card>

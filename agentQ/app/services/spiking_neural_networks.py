@@ -141,6 +141,7 @@ class SpikingNeuralNetworksService:
         self.networks: Dict[str, SpikingNetwork] = {}
         self.spike_queues: Dict[str, deque] = {}  # Queues for delayed spikes
         self.detected_anomalies: Dict[str, List[Dict]] = defaultdict(list) # NEW
+        self.network_activity_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=200)) # NEW: Store recent firing rates
         
         # Simulation parameters
         self.simulation_config = {
@@ -349,7 +350,7 @@ class SpikingNeuralNetworksService:
         return results
     
     async def _simulate_time_step(self, network: SpikingNetwork, current_time: float) -> List[SpikeEvent]:
-        """Simulate one time step and check for anomalies."""
+        """Simulate one time step, including adaptive anomaly detection."""
         generated_spikes = []
         
         # Process pending spikes
@@ -388,26 +389,28 @@ class SpikingNeuralNetworksService:
                         )
                         self.spike_queues[network.network_id].append(delayed_spike)
         
-        # --- NEW: Anomaly Detection through Surprise ---
-        # 1. Calculate the current firing rate
+        # --- Anomaly Detection through Adaptive Surprise ---
         num_spikes_this_step = len(generated_spikes)
         
-        # 2. Get the expected firing rate (baseline) from homeostatic plasticity
-        # A simple moving average of neuron thresholds can serve as a proxy for baseline activity
-        avg_threshold = np.mean([n.threshold for n in network.neurons.values()])
-        # A lower average threshold implies the network expects more activity.
-        # This is a heuristic and could be made more sophisticated.
-        expected_spikes = (1 - ((avg_threshold - (-60)) / (-40 - (-60)))) * 10 # Heuristic scale
+        # 1. Update the network's activity history
+        activity_history = self.network_activity_history[network.network_id]
+        activity_history.append(num_spikes_this_step)
+
+        # 2. Calculate the adaptive baseline (expected firing rate)
+        # We need enough history to establish a stable baseline.
+        expected_spikes = 0.0
+        if len(activity_history) > 50:
+            expected_spikes = np.mean(list(activity_history))
         
-        # 3. Calculate "Surprise" score
+        # 3. Calculate "Surprise" score against the adaptive baseline
         surprise = 0
-        if expected_spikes > 0:
+        if expected_spikes > 0.1: # Avoid division by zero or near-zero
             surprise = (num_spikes_this_step - expected_spikes) / expected_spikes
-        elif num_spikes_this_step > 0:
-            surprise = 1.0 # High surprise if unexpected spikes occur
+        elif num_spikes_this_step > 2: # A few spikes out of nowhere is surprising
+            surprise = 2.0 
 
         # 4. Detect anomaly if surprise is high
-        if surprise > 5.0: # e.g., 500% more spikes than expected
+        if surprise > 7.5: # Higher threshold because baseline is now adaptive
             anomaly_details = {
                 "timestamp": current_time,
                 "pattern": "Coordinated High-Frequency Burst",
@@ -418,11 +421,50 @@ class SpikingNeuralNetworksService:
             logger.warning("SNN Anomaly Detected!", anomaly=anomaly_details)
         # --- End Anomaly Detection ---
 
+        # --- NEW: STDP Learning Rule Implementation ---
+        # This loop updates synaptic weights based on spike timing.
+        for synapse in network.synapses:
+            pre_neuron = network.neurons[synapse.pre_neuron_id]
+            post_neuron = network.neurons[synapse.post_neuron_id]
+
+            # Check for a recent pre-synaptic spike
+            pre_spike_time = self._get_last_spike_time(pre_neuron, current_time)
+            if pre_spike_time is None:
+                continue
+
+            # Check for a recent post-synaptic spike
+            post_spike_time = self._get_last_spike_time(post_neuron, current_time)
+            if post_spike_time is None:
+                continue
+
+            time_diff = post_spike_time - pre_spike_time
+            
+            # STDP rule:
+            # If pre-synaptic spike occurs just before post-synaptic spike, potentiate (strengthen).
+            # If post-synaptic spike occurs just before pre-synaptic spike, depress (weaken).
+            if 0 < time_diff <= network.time_step: # Use network.time_step for tau_plus
+                # Potentiation (LTP)
+                delta_w = network.learning_rate * np.exp(-time_diff / network.time_step) # Use network.time_step for tau_plus
+                synapse.weight = min(2.0, synapse.weight + delta_w) # Bounds
+            elif -network.time_step <= time_diff < 0: # Use network.time_step for tau_minus
+                # Depression (LTD)
+                delta_w = -network.learning_rate * np.exp(time_diff / network.time_step) # Use network.time_step for tau_minus
+                synapse.weight = max(0.0, synapse.weight + delta_w) # Bounds
+        # --- End STDP ---
+        
         # Update network statistics
         network.simulation_time = current_time
         network.total_spikes += len(generated_spikes)
         
         return generated_spikes
+        
+    def _get_last_spike_time(self, neuron: SpikingNeuron, current_time: float) -> Optional[float]:
+        """Helper to get the last spike time for a neuron."""
+        # This is a conceptual helper. A real implementation would need to store
+        # spike times for each neuron within the simulation window.
+        if neuron.last_spike_time and current_time - neuron.last_spike_time < 50.0: # Check within 50ms window
+             return neuron.last_spike_time
+        return None
     
     async def _update_neuron(
         self, 

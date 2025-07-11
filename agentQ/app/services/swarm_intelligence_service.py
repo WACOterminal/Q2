@@ -42,6 +42,7 @@ class SwarmAlgorithm(Enum):
     FLOCKING = "flocking"                    # Boids flocking behavior
     CONSENSUS = "consensus"                  # Consensus algorithms
     DISTRIBUTED_VOTING = "distributed_voting" # Distributed voting
+    HYBRID_ACO_PSO = "hybrid_aco_pso"       # Hybrid ACO-PSO
 
 class SwarmBehavior(Enum):
     """Types of swarm behaviors"""
@@ -311,7 +312,9 @@ class SwarmIntelligenceService:
         """Run the specified swarm algorithm"""
         logger.info(f"Running {algorithm.value} algorithm")
         
-        if algorithm == SwarmAlgorithm.PARTICLE_SWARM:
+        if algorithm == SwarmAlgorithm.HYBRID_ACO_PSO:
+            return await self._run_hybrid_aco_pso(problem, swarm)
+        elif algorithm == SwarmAlgorithm.PARTICLE_SWARM:
             return await self._run_particle_swarm_optimization(problem, swarm)
         elif algorithm == SwarmAlgorithm.ANT_COLONY:
             return await self._run_ant_colony_optimization(problem, swarm)
@@ -1015,6 +1018,49 @@ class SwarmIntelligenceService:
             discovered_at=datetime.utcnow(),
             validation_status="pending"
         )
+
+    async def _run_hybrid_aco_pso(
+        self,
+        problem: SwarmProblem,
+        swarm: Dict[str, SwarmAgent]
+    ) -> SwarmSolution:
+        """
+        Runs a hybrid algorithm combining Ant Colony Optimization for global
+        exploration and Particle Swarm Optimization for local refinement.
+        """
+        logger.info("Running Hybrid ACO-PSO algorithm")
+        
+        # --- Phase 1: Ant Colony Optimization for Global Search ---
+        # The ACO phase identifies promising regions in the solution space.
+        num_aco_iterations = int(problem.max_iterations * 0.3) # 30% of iterations for exploration
+        
+        # This is a simplified call to the ACO logic we already have (conceptually)
+        aco_solution = await self._run_ant_colony_optimization(
+            problem, swarm, iterations=num_aco_iterations
+        )
+        logger.info("Hybrid Step 1 (ACO) completed.", best_fitness=aco_solution.fitness_score)
+
+        # --- Phase 2: Particle Swarm Optimization for Local Search ---
+        # The PSO phase refines the best solutions found by the ACO.
+        # We re-initialize the swarm agents' positions around the best ACO solution.
+        for agent in swarm.values():
+            for i in range(len(agent.position)):
+                noise = np.random.uniform(-0.1, 0.1) * (problem.solution_bounds[i][1] - problem.solution_bounds[i][0])
+                agent.position[i] = aco_solution.solution_vector[i] + noise
+                # Ensure they are within bounds
+                agent.position[i] = max(problem.solution_bounds[i][0], min(problem.solution_bounds[i][1], agent.position[i]))
+
+        # Now, run PSO for the remaining iterations
+        num_pso_iterations = problem.max_iterations - num_aco_iterations
+        pso_problem = problem
+        pso_problem.max_iterations = num_pso_iterations # Update iterations for the PSO run
+        
+        final_solution = await self._run_particle_swarm_optimization(
+            pso_problem, swarm
+        )
+        logger.info("Hybrid Step 2 (PSO) completed.", final_fitness=final_solution.fitness_score)
+        
+        return final_solution
     
     async def _setup_swarm_topics(self):
         """Setup Pulsar topics for swarm communication"""

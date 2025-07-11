@@ -1,0 +1,30 @@
+workflow_id: "wf_drone_logistics_optimization"
+original_prompt: "Find the optimal delivery routes for a fleet of drones, considering package weight, battery life, and weather."
+shared_context:
+  problem_description: "A complex, multi-variable logistics problem for a drone delivery fleet."
+  swarm_algorithm: "HYBRID_ACO_PSO" # Use our new state-of-the-art algorithm
+
+tasks:
+  - task_id: "define_logistics_problem"
+    type: "task"
+    agent_personality: "logistics_agent"
+    prompt: |
+      You must define the drone logistics optimization problem.
+      1. **Gather Data**: Fetch the list of pending packages, drone fleet status (including battery levels), and real-time weather data using the appropriate tools.
+      2. **Formulate Problem**: Convert this data into a formal optimization problem definition, including the objective function (e.g., minimize total delivery time) and all constraints (e.g., battery life, package weight limits).
+      
+      Your final output must be a JSON object representing the formal problem definition.
+    dependencies: []
+
+  - task_id: "solve_with_swarm_intelligence"
+    type: "task"
+    agent_personality: "logistics_agent"
+    prompt: |
+      The logistics problem has been defined:
+      {{ tasks.define_logistics_problem.result }}
+
+      You must now use the `solve_problem_with_swarm` tool to find the optimal solution.
+      Use the algorithm specified in the shared context: `{{ shared_context.swarm_algorithm }}`.
+      
+      The raw solution from the tool will be your final answer.
+    dependencies: ["define_logistics_problem"] 

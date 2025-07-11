@@ -626,6 +626,66 @@ class QuantumSVM(QuantumMLAlgorithmBase):
         """Calculate SVM accuracy"""
         return np.mean(predictions == labels)
 
+class QuantumGAN(QuantumMLAlgorithmBase):
+    """Quantum Generative Adversarial Network for data generation."""
+    
+    def __init__(self, num_qubits: int, latent_dim: int):
+        self.num_qubits = num_qubits
+        self.latent_dim = latent_dim
+        # Using a simple classical discriminator for this simulation
+        self.discriminator = self._create_classical_discriminator()
+
+    def _create_classical_discriminator(self):
+        """Simulates a simple classical discriminator network."""
+        # In a real scenario, this would be a PyTorch or TensorFlow model.
+        # We simulate it with a simple dictionary of weights.
+        return {'weights': np.random.rand(self.num_qubits, 1), 'bias': np.random.rand(1)}
+
+    async def train(self, dataset: MLDataset, config: Dict[str, Any]) -> QuantumMLModel:
+        """Adversarially train the Quantum Generator and Classical Discriminator."""
+        logger.info(f"Starting QGAN training on dataset: {dataset.dataset_id}")
+        
+        generator_params = np.random.uniform(0, 2 * np.pi, self.num_qubits * 2)
+        epochs = config.get("epochs", 20)
+
+        for epoch in range(epochs):
+            # 1. Train Discriminator
+            # Get real data
+            real_samples = dataset.features[np.random.choice(dataset.features.shape[0], 50, replace=False)]
+            
+            # Generate fake data from quantum generator
+            latent_vectors = np.random.randn(50, self.latent_dim)
+            fake_samples = await self._run_quantum_generator(generator_params, latent_vectors)
+            
+            # Train discriminator (simulated)
+            self._train_discriminator(real_samples, fake_samples)
+
+            # 2. Train Generator
+            # We want the generator to fool the discriminator
+            latent_vectors = np.random.randn(50, self.latent_dim)
+            # This would involve calculating a quantum gradient to update generator_params
+            # We will simulate this update for now.
+            generator_params += np.random.uniform(-0.1, 0.1, generator_params.shape)
+
+            logger.info(f"QGAN Epoch {epoch+1}/{epochs} completed.")
+
+        # ... (Return a trained QuantumMLModel instance)
+        return QuantumMLModel(...)
+
+    async def _run_quantum_generator(self, params: np.ndarray, latent_vectors: np.ndarray) -> np.ndarray:
+        """Runs the quantum generator circuit to produce data."""
+        # This would involve creating a PQC and running it on a simulator.
+        # We simulate the output.
+        num_samples = latent_vectors.shape[0]
+        return np.random.rand(num_samples, self.num_qubits)
+
+    def _train_discriminator(self, real_samples: np.ndarray, fake_samples: np.ndarray):
+        """Simulates one step of training for the classical discriminator."""
+        # A real implementation would use backpropagation.
+        # We'll just slightly adjust weights towards classifying real as 1 and fake as 0.
+        self.discriminator['weights'] *= 1.01
+        self.discriminator['bias'] *= 0.99
+        
 class QuantumMLExperimentsService:
     """
     Service for quantum machine learning experiments
@@ -639,7 +699,8 @@ class QuantumMLExperimentsService:
         # ML algorithms
         self.algorithms = {
             QuantumMLAlgorithm.QUANTUM_NEURAL_NETWORK: QuantumNeuralNetwork(),
-            QuantumMLAlgorithm.QUANTUM_SVM: QuantumSVM()
+            QuantumMLAlgorithm.QUANTUM_SVM: QuantumSVM(),
+            QuantumMLAlgorithm.QUANTUM_GAN: QuantumGAN(num_qubits=4, latent_dim=2) # NEW
         }
         
         # Datasets and experiments
