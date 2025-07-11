@@ -530,7 +530,80 @@ print(json.dumps(result))
 
     async def _get_object_properties(self, credential_id: str, config: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
         """Get object properties and measurements."""
-        return {"status": "success", "message": "Object properties retrieval not yet implemented"}
+        try:
+            object_name = data.get("object_name")
+            if not object_name:
+                return {"status": "error", "message": "Object name is required"}
+            
+            # Execute FreeCAD Python code to get object properties
+            freecad_code = f"""
+import FreeCAD
+import Part
+
+# Get the object
+obj = FreeCAD.ActiveDocument.getObject('{object_name}')
+if obj is None:
+    result = {{"error": "Object not found"}}
+else:
+    properties = {{}}
+    
+    # Basic properties
+    properties['Name'] = obj.Name
+    properties['Label'] = obj.Label
+    properties['Type'] = obj.TypeId
+    
+    # Geometric properties if it's a Part object
+    if hasattr(obj, 'Shape') and obj.Shape:
+        shape = obj.Shape
+        properties['Volume'] = shape.Volume
+        properties['Area'] = shape.Area
+        properties['BoundBox'] = {{
+            'XMin': shape.BoundBox.XMin,
+            'YMin': shape.BoundBox.YMin,
+            'ZMin': shape.BoundBox.ZMin,
+            'XMax': shape.BoundBox.XMax,
+            'YMax': shape.BoundBox.YMax,
+            'ZMax': shape.BoundBox.ZMax,
+            'XLength': shape.BoundBox.XLength,
+            'YLength': shape.BoundBox.YLength,
+            'ZLength': shape.BoundBox.ZLength
+        }}
+        properties['CenterOfMass'] = {{
+            'x': shape.CenterOfMass.x,
+            'y': shape.CenterOfMass.y,
+            'z': shape.CenterOfMass.z
+        }}
+    
+    # Material properties if available
+    if hasattr(obj, 'Material') and obj.Material:
+        properties['Material'] = obj.Material
+    
+    # Custom properties
+    for prop in obj.PropertiesList:
+        if not prop.startswith('_'):
+            try:
+                value = getattr(obj, prop)
+                if isinstance(value, (int, float, str, bool)):
+                    properties[prop] = value
+            except:
+                pass
+    
+    result = {{"properties": properties}}
+"""
+            
+            result = await self._execute_freecad_code(freecad_code, credential_id, config)
+            
+            if "error" in result:
+                return {"status": "error", "message": result["error"]}
+            
+            return {
+                "status": "success", 
+                "properties": result.get("properties", {}),
+                "message": f"Retrieved properties for object: {object_name}"
+            }
+            
+        except Exception as e:
+            return {"status": "error", "message": f"Failed to get object properties: {str(e)}"}
 
     async def _create_sketch(self, credential_id: str, config: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
         """Create 2D sketches."""
@@ -554,7 +627,134 @@ print(json.dumps(result))
 
     async def _check_interference(self, credential_id: str, config: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
         """Check for interference between objects."""
-        return {"status": "success", "message": "Interference checking not yet implemented"}
+        try:
+            object1_name = data.get("object1_name")
+            object2_name = data.get("object2_name")
+            
+            if not object1_name or not object2_name:
+                return {"status": "error", "message": "Both object names are required"}
+            
+            # Execute FreeCAD Python code to check interference
+            freecad_code = f"""
+import FreeCAD
+import Part
+
+# Get the objects
+obj1 = FreeCAD.ActiveDocument.getObject('{object1_name}')
+obj2 = FreeCAD.ActiveDocument.getObject('{object2_name}')
+
+if obj1 is None or obj2 is None:
+    result = {{"error": "One or both objects not found"}}
+else:
+    # Check if both objects have shapes
+    if hasattr(obj1, 'Shape') and hasattr(obj2, 'Shape') and obj1.Shape and obj2.Shape:
+        # Check for intersection
+        try:
+            intersection = obj1.Shape.common(obj2.Shape)
+            has_interference = intersection.Volume > 1e-6  # Small tolerance for floating point
+            
+            if has_interference:
+                result = {{
+                    "interference_detected": True,
+                    "intersection_volume": intersection.Volume,
+                    "intersection_area": intersection.Area,
+                    "message": "Objects interfere with each other"
+                }}
+            else:
+                result = {{
+                    "interference_detected": False,
+                    "message": "No interference detected between objects"
+                }}
+        except Exception as e:
+            result = {{"error": f"Failed to check interference: {{str(e)}}"}}
+    else:
+        result = {{"error": "Objects do not have valid shapes for interference checking"}}
+"""
+            
+            result = await self._execute_freecad_code(freecad_code, credential_id, config)
+            
+            if "error" in result:
+                return {"status": "error", "message": result["error"]}
+            
+            return {
+                "status": "success",
+                "interference_detected": result.get("interference_detected", False),
+                "intersection_volume": result.get("intersection_volume", 0),
+                "intersection_area": result.get("intersection_area", 0),
+                "message": result.get("message", "Interference check completed")
+            }
+            
+        except Exception as e:
+            return {"status": "error", "message": f"Failed to check interference: {str(e)}"}
+    
+    async def _execute_freecad_code(self, freecad_code: str, credential_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute FreeCAD Python code and return results."""
+        try:
+            # Get FreeCAD connection details
+            credentials = await self.vault_client.get_credentials(credential_id)
+            freecad_path = credentials.get("freecad_path", "/usr/bin/freecad")
+            python_path = credentials.get("python_path", "/usr/bin/python3")
+            
+            # Create a temporary Python script
+            import tempfile
+            import os
+            import subprocess
+            import json
+            
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                # Write the FreeCAD execution script
+                script_content = f"""
+import sys
+sys.path.append('{freecad_path}/lib')
+import FreeCAD
+import Part
+
+# Create or open document
+try:
+    doc = FreeCAD.ActiveDocument
+    if doc is None:
+        doc = FreeCAD.newDocument()
+except:
+    doc = FreeCAD.newDocument()
+
+# Execute the user code
+try:
+    {freecad_code}
+    print(json.dumps(result))
+except Exception as e:
+    print(json.dumps({{"error": str(e)}}))
+"""
+                f.write(script_content)
+                script_path = f.name
+            
+            try:
+                # Execute the script
+                process = subprocess.run(
+                    [python_path, script_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if process.returncode == 0:
+                    # Parse the JSON output
+                    try:
+                        import json
+                        result = json.loads(process.stdout.strip())
+                        return result
+                    except json.JSONDecodeError:
+                        return {"error": f"Failed to parse FreeCAD output: {process.stdout}"}
+                else:
+                    return {"error": f"FreeCAD execution failed: {process.stderr}"}
+                    
+            finally:
+                # Clean up temporary file
+                os.unlink(script_path)
+                
+        except subprocess.TimeoutExpired:
+            return {"error": "FreeCAD execution timed out"}
+        except Exception as e:
+            return {"error": f"Failed to execute FreeCAD code: {str(e)}"}
 
     async def _generate_gcode(self, credential_id: str, config: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate G-code for 3D printing/CNC."""

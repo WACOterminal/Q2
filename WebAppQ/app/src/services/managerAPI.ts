@@ -175,6 +175,29 @@ export const controlWorkflow = async (workflowId: string, action: 'pause' | 'res
     return response.json();
 };
 
+export const ingestDataSource = async (data: { url: string }): Promise<any> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/v1/ingestion/web`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to ingest data source' }));
+        throw new Error(errorData.detail);
+    }
+
+    return response.json();
+};
+
 // --- WebSocket Management ---
 
 let dashboardSocketClient: W3CWebSocket | null = null;

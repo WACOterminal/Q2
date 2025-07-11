@@ -1,0 +1,43 @@
+{
+    "gem_name": "Q-WorkflowVisualization",
+    "uuid": "{B1C2D3E4-F5G6-7890-BCDE-FG1234567890}",
+    "version": "1.0.0",
+    "display_name": "Q Platform Workflow Visualization",
+    "license": "Apache-2.0 OR MIT",
+    "license_url": "https://github.com/o3de/o3de/blob/development/LICENSE.txt",
+    "origin": "Q Platform Team",
+    "origin_url": "https://github.com/q-platform/q-platform",
+    "type": "Code",
+    "summary": "3D workflow visualization system for Q Platform with WebAssembly support",
+    "canonical_tags": [
+        "Gem"
+    ],
+    "user_tags": [
+        "Workflow",
+        "3D",
+        "Visualization",
+        "WebAssembly",
+        "Collaboration",
+        "AI"
+    ],
+    "icon_path": "preview.png",
+    "requirements": "",
+    "documentation_url": "",
+    "dependencies": [
+        "Atom",
+        "AudioSystem", 
+        "CameraFramework",
+        "HttpRequestor",
+        "PhysX",
+        "ScriptCanvas"
+    ],
+    "compatible_engines": [
+        "o3de-2.0"
+    ],
+    "engine_api_dependencies": [
+        "framework",
+        "azframework", 
+        "azcore",
+        "atom"
+    ]
+} 

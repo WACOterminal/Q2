@@ -6,7 +6,7 @@ import yaml
 import structlog
 from contextlib import asynccontextmanager
 
-from managerQ.app.api import tasks, goals, dashboard_ws, agent_tasks, workflows, search, model_registry, planner, user_workflows, observability_ws
+from managerQ.app.api import tasks, goals, dashboard_ws, agent_tasks, workflows, search, model_registry, planner, user_workflows, observability_ws, ingestion
 from managerQ.app.core.agent_registry import AgentRegistry, agent_registry
 from managerQ.app.core.task_dispatcher import TaskDispatcher, task_dispatcher
 from managerQ.app.core.result_listener import ResultListener, result_listener
@@ -157,6 +157,7 @@ app.include_router(model_registry.router, prefix="/v1/model-registry", tags=["Mo
 app.include_router(planner.router, prefix="/v1/planner", tags=["Planner"])
 app.include_router(user_workflows.router, prefix="/v1/user-workflows", tags=["User Workflows"])
 app.include_router(observability_ws.router, prefix="/v1/observability", tags=["Observability"])
+app.include_router(ingestion.router, prefix="/v1/ingestion", tags=["Ingestion"])
 
 @app.get("/health", tags=["Health"])
 def health_check():

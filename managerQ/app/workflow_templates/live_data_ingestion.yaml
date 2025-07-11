@@ -1,0 +1,22 @@
+workflow_id: "wf_live_data_ingestion"
+original_prompt: "Ingest data from a web URL and add it to the platform's knowledge base."
+shared_context:
+  # The source_url will be injected by the API endpoint that triggers this workflow.
+  source_url: "https://example.com" 
+
+tasks:
+  - task_id: "ingest_web_content"
+    type: "task"
+    agent_personality: "knowledge_engineer"
+    prompt: |
+      You have been tasked with ingesting content from a web page.
+
+      1. **Fetch**: Use the `http_get` tool to retrieve the content from the URL: '{{ shared_context.source_url }}'.
+      2. **Process**: The result will be HTML. Extract the main textual content. You should focus on paragraphs, headings, and lists. Ignore navigation bars, footers, and advertisements.
+      3. **Chunk**: Split the extracted text into meaningful chunks, each around 2-4 paragraphs long.
+      4. **Ingest**: For each chunk, use the `knowledgegraph_add_chunk` and `vectorstore_upsert` tools.
+         - For `knowledgegraph_add_chunk`, create a new 'Document' node for the URL and link the 'Chunk' nodes to it.
+         - For `vectorstore_upsert`, use the 'text-embedding-ada-002' model to generate embeddings for each chunk and upsert them into the 'general_knowledge' collection.
+
+      The user '{{ shared_context.requesting_user_id }}' initiated this request.
+    dependencies: [] 

@@ -16,6 +16,7 @@ import GoalsPage from './pages/GoalsPage'; // Import the new Goals page
 import GoalDetailPage from './pages/GoalDetailPage'; // Import the new Goal Detail page
 import { GettingStartedPage } from './pages/GettingStartedPage';
 import Integrations from './pages/Integrations';
+import { DataSourcesPage } from './pages/DataSourcesPage';
 
 function Home() {
   const authContext = useContext(AuthContext);
@@ -95,6 +96,7 @@ function App() {
           <Button color="inherit" component={Link} to="/approvals">Approvals</Button>
           <Button color="inherit" component={Link} to="/studio">Studio</Button>
           <Button color="inherit" component={Link} to="/integrations">Integrations</Button>
+          <Button color="inherit" component={Link} to="/data-sources">Data Sources</Button>
           <Button color="inherit" component={Link} to="/getting-started">Getting Started</Button>
           <Button color="inherit" onClick={() => authContext.logout && authContext.logout()}>Logout</Button>
         </Toolbar>
@@ -112,6 +114,7 @@ function App() {
         <Route path="/goals/:goalId" element={<RequireAuth><GoalDetailPage /></RequireAuth>} />
         <Route path="/getting-started" element={<GettingStartedPage />} />
         <Route path="/integrations" element={<RequireAuth><Integrations /></RequireAuth>} />
+        <Route path="/data-sources" element={<RequireAuth><DataSourcesPage /></RequireAuth>} />
       </Routes>
     </Box>
   );

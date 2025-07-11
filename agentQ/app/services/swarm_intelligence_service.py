@@ -889,8 +889,112 @@ class SwarmIntelligenceService:
         swarm: Dict[str, SwarmAgent]
     ) -> SwarmSolution:
         """Run Artificial Bee Colony algorithm"""
-        # Placeholder - would implement full ABC algorithm
-        return await self._run_generic_swarm_algorithm(problem, swarm)
+        logger.info(f"Running Bee Colony Optimization for problem: {problem.problem_id}")
+        
+        # ABC algorithm parameters
+        max_iterations = problem.max_iterations
+        limit = 100  # Abandonment limit
+        
+        # Initialize food sources (solutions)
+        food_sources = {}
+        for agent_id, agent in swarm.items():
+            if agent.role == SwarmRole.WORKER:
+                food_sources[agent_id] = {
+                    "position": agent.position.copy(),
+                    "fitness": agent.fitness,
+                    "trial_count": 0
+                }
+        
+        best_solution = None
+        best_fitness = float('-inf')
+        convergence_data = []
+        
+        for iteration in range(max_iterations):
+            # Employed bees phase
+            for agent_id, food_source in food_sources.items():
+                # Generate new candidate solution
+                candidate = self._generate_candidate_solution(food_source["position"], problem)
+                candidate_fitness = await self._evaluate_fitness(candidate, problem)
+                
+                # Greedy selection
+                if candidate_fitness > food_source["fitness"]:
+                    food_source["position"] = candidate
+                    food_source["fitness"] = candidate_fitness
+                    food_source["trial_count"] = 0
+                else:
+                    food_source["trial_count"] += 1
+                
+                # Update best solution
+                if candidate_fitness > best_fitness:
+                    best_solution = candidate.copy()
+                    best_fitness = candidate_fitness
+            
+            # Onlooker bees phase
+            total_fitness = sum(fs["fitness"] for fs in food_sources.values())
+            
+            for agent_id, food_source in food_sources.items():
+                # Calculate selection probability
+                if total_fitness > 0:
+                    prob = food_source["fitness"] / total_fitness
+                else:
+                    prob = 1.0 / len(food_sources)
+                
+                # Select food source based on probability
+                if np.random.random() < prob:
+                    # Generate new candidate solution
+                    candidate = self._generate_candidate_solution(food_source["position"], problem)
+                    candidate_fitness = await self._evaluate_fitness(candidate, problem)
+                    
+                    # Greedy selection
+                    if candidate_fitness > food_source["fitness"]:
+                        food_source["position"] = candidate
+                        food_source["fitness"] = candidate_fitness
+                        food_source["trial_count"] = 0
+                    else:
+                        food_source["trial_count"] += 1
+                    
+                    # Update best solution
+                    if candidate_fitness > best_fitness:
+                        best_solution = candidate.copy()
+                        best_fitness = candidate_fitness
+            
+            # Scout bees phase
+            for agent_id, food_source in food_sources.items():
+                if food_source["trial_count"] > limit:
+                    # Abandon food source and search for new one
+                    new_position = self._generate_random_solution(problem)
+                    new_fitness = await self._evaluate_fitness(new_position, problem)
+                    
+                    food_source["position"] = new_position
+                    food_source["fitness"] = new_fitness
+                    food_source["trial_count"] = 0
+                    
+                    # Update best solution
+                    if new_fitness > best_fitness:
+                        best_solution = new_position.copy()
+                        best_fitness = new_fitness
+            
+            # Update convergence data
+            convergence_data.append(best_fitness)
+            
+            # Check convergence
+            if len(convergence_data) > 10:
+                recent_improvement = abs(convergence_data[-1] - convergence_data[-10])
+                if recent_improvement < 1e-6:
+                    logger.info(f"ABC converged at iteration {iteration}")
+                    break
+        
+        return SwarmSolution(
+            solution_id=f"abc_solution_{uuid.uuid4().hex[:12]}",
+            problem_id=problem.problem_id,
+            solution_vector=best_solution,
+            fitness_score=best_fitness,
+            confidence=0.9,
+            contributing_agents=list(swarm.keys()),
+            generation=iteration,
+            discovered_at=datetime.utcnow(),
+            validation_status="validated"
+        )
     
     async def _run_generic_swarm_algorithm(
         self,
@@ -923,6 +1027,37 @@ class SwarmIntelligenceService:
         
         for topic in topics:
             await self.pulsar_service.ensure_topic(topic)
+    
+    def _generate_candidate_solution(self, current_position: List[float], problem: SwarmProblem) -> List[float]:
+        """Generate a candidate solution near the current position"""
+        if not current_position:
+            return self._generate_random_solution(problem)
+        
+        # Generate candidate with small random perturbation
+        candidate = current_position.copy()
+        for i in range(len(candidate)):
+            # Add random noise
+            noise = np.random.normal(0, 0.1)
+            candidate[i] += noise
+            
+            # Apply bounds if specified
+            if problem.bounds:
+                lower_bound = problem.bounds.get("lower", -10.0)
+                upper_bound = problem.bounds.get("upper", 10.0)
+                candidate[i] = np.clip(candidate[i], lower_bound, upper_bound)
+        
+        return candidate
+    
+    def _generate_random_solution(self, problem: SwarmProblem) -> List[float]:
+        """Generate a random solution for the problem"""
+        dimensions = problem.dimensions
+        
+        if problem.bounds:
+            lower_bound = problem.bounds.get("lower", -10.0)
+            upper_bound = problem.bounds.get("upper", 10.0)
+            return [np.random.uniform(lower_bound, upper_bound) for _ in range(dimensions)]
+        else:
+            return [np.random.uniform(-10.0, 10.0) for _ in range(dimensions)]
 
 # Global service instance
 swarm_intelligence_service = SwarmIntelligenceService() 
