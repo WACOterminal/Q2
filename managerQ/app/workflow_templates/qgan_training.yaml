@@ -18,8 +18,8 @@ tasks:
     agent_personality: "quantum_ml"
     prompt: |
       The QGAN model has been trained successfully.
-      The training result, which contains the new model_id, is: {{ tasks.train_the_qgan.result }}
+      The training result was: {{ tasks.train_the_qgan.result }}
       
       You must now use the `generate_qgan_samples` tool to generate {{ shared_context.num_samples_to_generate }} new data points.
-      Extract the `best_model_id` from the previous step's result to use as the `model_id` parameter.
+      Use the model_id 'qgan-singleton' as it is the only one available.
     dependencies: ["train_the_qgan"] 

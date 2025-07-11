@@ -1,59 +1,114 @@
 import structlog
 import json
+import uuid
+import pulsar
+import time
 from agentQ.app.core.toolbox import Tool
-from agentQ.app.services.quantum_ml_experiments import quantum_ml_experiments
+from typing import Dict, Any, Optional
 
 logger = structlog.get_logger(__name__)
 
-def train_qgan_model(dataset_id: str, epochs: int = 20, config: dict = None) -> str:
+PULSAR_URL = 'pulsar://pulsar:6650'
+COMMAND_TOPIC = "persistent://public/default/qgan-commands"
+RESULTS_TOPIC = "persistent://public/default/qgan-results"
+
+def _invoke_qgan_service(command: str, params: Dict[str, Any], timeout: int = 120) -> Dict[str, Any]:
+    """
+    A private helper function to send a command to the QGAN service and await a response.
+    """
+    request_id = str(uuid.uuid4())
+    logger.info("Invoking QGAN service", command=command, request_id=request_id)
+    
+    client = None
+    producer = None
+    consumer = None
+    
+    try:
+        client = pulsar.Client(PULSAR_URL)
+        producer = client.create_producer(COMMAND_TOPIC)
+        consumer = client.subscribe(RESULTS_TOPIC, f"qgan-client-sub-{request_id}")
+
+        # Construct and send the command
+        command_payload = {
+            "request_id": request_id,
+            "command": command,
+            "params": params
+        }
+        producer.send(json.dumps(command_payload).encode('utf-8'))
+
+        # Wait for the specific response
+        while True:
+            msg = consumer.receive(timeout_millis=timeout * 1000)
+            response = json.loads(msg.data().decode('utf-8'))
+            consumer.acknowledge(msg)
+            
+            if response.get("request_id") == request_id:
+                logger.info("Received response for QGAN request", request_id=request_id, status=response.get("status"))
+                if response.get("status") == "error":
+                    raise RuntimeError(f"QGAN service returned an error: {response.get('error')}")
+                return response.get("result")
+    
+    except pulsar.Timeout:
+        logger.error("Timed out waiting for QGAN service response", request_id=request_id)
+        raise
+    except Exception as e:
+        logger.error("Failed to invoke QGAN service", exc_info=True)
+        raise
+    finally:
+        if consumer:
+            consumer.close()
+        if producer:
+            producer.close()
+        if client:
+            client.close()
+
+
+def train_qgan_model(dataset_id: str, epochs: int = 20, config: Optional[Dict] = None) -> str:
     """
     Trains a Quantum Generative Adversarial Network (QGAN) on a given dataset.
+    This tool sends a command to the QuantumPulse service to perform the training.
 
     Args:
-        dataset_id (str): The ID of the dataset to train on.
+        dataset_id (str): The ID or reference to the dataset to train on.
         epochs (int): The number of training epochs.
 
     Returns:
-        str: A JSON string containing the ID of the trained model and its final accuracy.
+        str: A JSON string containing the result of the training job.
     """
-    logger.info("Training QGAN model", dataset_id=dataset_id, epochs=epochs)
+    logger.info("Requesting QGAN model training", dataset_id=dataset_id, epochs=epochs)
+    # In a real system, the dataset_id would be used to fetch data.
+    # Here, we'll just pass some mock data for the service to use.
+    mock_real_data = [[1.0, -1.0, 1.0, -1.0]] * 10
+    params = {"data": mock_real_data, "epochs": epochs}
+    
     try:
-        # This is a conceptual call to our new service logic.
-        # It assumes the service has a method to run the experiment.
-        experiment_id = quantum_ml_experiments.create_ml_experiment(
-            name=f"QGAN_Training_{dataset_id}",
-            algorithm="QUANTUM_GAN",
-            dataset_id=dataset_id,
-            config={"epochs": epochs}
-        )
-        # In a real system, this would be asynchronous. We simulate waiting for the result.
-        result = quantum_ml_experiments.get_experiment_results(experiment_id)
+        result = _invoke_qgan_service("train", params)
         return json.dumps(result)
     except Exception as e:
-        logger.error("Failed to train QGAN model", exc_info=True)
-        return f"Error: An unexpected error occurred during QGAN training: {e}"
+        return f"Error: Failed to train QGAN model: {e}"
 
-def generate_qgan_samples(model_id: str, num_samples: int, config: dict = None) -> str:
+
+def generate_qgan_samples(model_id: str, num_samples: int, config: Optional[Dict] = None) -> str:
     """
     Generates new data samples using a trained QGAN model.
+    This tool sends a command to the QuantumPulse service to perform the generation.
 
     Args:
-        model_id (str): The ID of the trained QGAN model.
+        model_id (str): The ID of the trained QGAN model (currently ignored, uses singleton).
         num_samples (int): The number of samples to generate.
 
     Returns:
         str: A JSON string list of the generated data samples.
     """
-    logger.info("Generating samples from QGAN model", model_id=model_id, num_samples=num_samples)
+    logger.info("Requesting QGAN sample generation", model_id=model_id, num_samples=num_samples)
+    params = {"n_samples": num_samples}
+    
     try:
-        # Conceptual call to the model's generation method.
-        samples = quantum_ml_experiments.models[model_id].generate(num_samples)
-        return json.dumps(samples.tolist())
-    except KeyError:
-        return f"Error: Model with ID '{model_id}' not found."
+        samples = _invoke_qgan_service("generate_samples", params)
+        return json.dumps(samples)
     except Exception as e:
-        logger.error("Failed to generate QGAN samples", exc_info=True)
-        return f"Error: An unexpected error occurred during sample generation: {e}"
+        return f"Error: Failed to generate QGAN samples: {e}"
+
 
 # --- Tool Registration ---
 train_qgan_tool = Tool(

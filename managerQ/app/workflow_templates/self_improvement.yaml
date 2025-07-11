@@ -1,0 +1,56 @@
+workflow_id: "wf_self_improvement"
+original_prompt: "Analyze the 'summarize_document' workflow and propose an improvement."
+shared_context:
+  target_workflow_id: "wf_summarize_document"
+  target_document_path: "/app/data/sample_document.txt" # A sample path within the agent's sandbox
+
+tasks:
+  - task_id: "execute_target_workflow"
+    type: "task"
+    agent_personality: "default"
+    prompt: "Execute the 'summarize_document' workflow on the file at '{{ shared_context.target_document_path }}'."
+    # In a real system, we might have a tool to trigger and await workflows.
+    # For this example, we'll simulate the execution and assume a result is available.
+    # The 'result' would contain the summary.
+    dependencies: []
+
+  - task_id: "get_execution_history"
+    type: "task"
+    agent_personality: "meta_analyzer" # A personality specialized for this kind of task
+    prompt: "Retrieve the thought and action history for the agent that just executed the 'summarize_document' workflow."
+    dependencies:
+      - "execute_target_workflow"
+
+  - task_id: "analyze_performance"
+    type: "task"
+    agent_personality: "meta_analyzer"
+    prompt: |
+      Analyze the following task history for inefficiencies or potential improvements:
+      ---
+      {{ tasks.get_execution_history.result }}
+      ---
+    dependencies:
+      - "get_execution_history"
+
+  - task_id: "propose_improvement"
+    type: "task"
+    agent_personality: "meta_analyzer"
+    prompt: |
+      Based on the following performance analysis, propose a concrete improvement to the '{{ shared_context.target_workflow_id }}' workflow.
+      Analysis:
+      ---
+      {{ tasks.analyze_performance.result }}
+      ---
+    dependencies:
+      - "analyze_performance"
+
+  - task_id: "report_findings"
+    type: "task"
+    agent_personality: "default"
+    prompt: |
+      The self-improvement analysis is complete. The following suggestion has been logged for human review:
+      ---
+      {{ tasks.propose_improvement.result }}
+      ---
+    dependencies:
+      - "propose_improvement" 

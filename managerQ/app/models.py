@@ -61,6 +61,9 @@ class WorkflowTask(BaseModel):
     result: Optional[str] = None
     condition: Optional[str] = Field(None, description="A Jinja2 condition to evaluate before dispatching the task.")
     thought: Optional[str] = None
+    retry_count: int = Field(0, description="The number of times this task has been retried.")
+    max_retries: int = Field(3, description="The maximum number of retries allowed for this task.")
+    bypass_ethical_review: bool = Field(False, description="If true, the Guardian will not review this task's result.")
 
 # --- NEW: Models for Conditional Logic ---
 

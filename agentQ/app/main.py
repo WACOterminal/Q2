@@ -44,8 +44,9 @@ from agentQ.app.core.file_system_tool import read_file_tool, write_file_tool, li
 from agentQ.app.core.openproject_tool import openproject_comment_tool
 from agentQ.app.core.create_goal_tool import create_goal_tool
 from agentQ.app.core.await_goal_tool import await_goal_tool
+from agentQ.app.core.estimate_cost_tool import estimate_cost_tool # Import the new tool
 from agentQ.app.core.prompts import REFLEXION_PROMPT_TEMPLATE
-from shared.q_messaging_schemas.schemas import PROMPT_SCHEMA, RESULT_SCHEMA, REGISTRATION_SCHEMA, THOUGHT_SCHEMA
+from shared.q_messaging_schemas.schemas import PROMPT_SCHEMA, RESULT_SCHEMA, REGISTRATION_SCHEMA, THOUGHT_SCHEMA, TaskAnnouncement, AgentBid # Import new schemas
 from agentQ.devops_agent import setup_devops_agent, DEVOPS_SYSTEM_PROMPT, AGENT_ID as DEVOPS_AGENT_ID, TASK_TOPIC as DEVOPS_TASK_TOPIC
 from agentQ.data_analyst_agent import setup_data_analyst_agent, DATA_ANALYST_SYSTEM_PROMPT, AGENT_ID as DA_AGENT_ID, TASK_TOPIC as DA_TASK_TOPIC
 from agentQ.knowledge_engineer_agent import setup_knowledge_engineer_agent, KNOWLEDGE_ENGINEER_SYSTEM_PROMPT, AGENT_ID as KE_AGENT_ID, TASK_TOPIC as KE_TASK_TOPIC
@@ -469,6 +470,66 @@ def health_check():
 def run_health_server():
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
+# --- NEW: Function to run the bid listener ---
+def run_bid_listener(agent_id: str, personality: str, agent_toolbox: Toolbox):
+    """
+    Listens for task announcements and submits bids.
+    Runs in a separate thread for each agent.
+    """
+    logger.info("Starting bid listener thread...", agent_id=agent_id)
+    announcement_topic = "persistent://public/default/task-announcements"
+    bids_topic = "persistent://public/default/task-bids"
+    
+    local_pulsar_client = None
+    consumer = None
+    producer = None
+    try:
+        local_pulsar_client = pulsar.Client(PULSAR_URL)
+        consumer = local_pulsar_client.subscribe(
+            announcement_topic,
+            f"agent-bidders-{agent_id}",
+            schema=pulsar.schema.JsonSchema(TaskAnnouncement)
+        )
+        producer = local_pulsar_client.create_producer(bids_topic)
+
+        while running:
+            try:
+                msg = consumer.receive(timeout_millis=5000)
+                announcement = msg.value()
+                logger.info("Received task announcement", task_id=announcement.task_id, agent_id=agent_id)
+
+                # Use the estimate_cost_tool to generate a bid
+                agent_context = {
+                    "agent_id": agent_id,
+                    "personality": personality,
+                    "load_factor": 0.5 # This would be dynamic in a real scenario
+                }
+                bid = agent_toolbox.execute_tool("estimate_task_cost", task_announcement=announcement, agent_context=agent_context)
+                
+                # Publish the bid
+                producer.send(json.dumps(bid.to_json()).encode('utf-8'))
+                logger.info("Submitted bid for task", task_id=announcement.task_id, bid_value=bid.bid_value, agent_id=agent_id)
+
+                consumer.acknowledge(msg)
+            except pulsar.Timeout:
+                continue # No message, loop again
+            except Exception as e:
+                logger.error("Error in bid listener loop", error=str(e), agent_id=agent_id, exc_info=True)
+                # Avoid hammering on repeated errors
+                time.sleep(5)
+    
+    except Exception as e:
+        logger.error("Bid listener thread failed to initialize", error=str(e), agent_id=agent_id, exc_info=True)
+    finally:
+        if consumer:
+            consumer.close()
+        if producer:
+            producer.close()
+        if local_pulsar_client:
+            local_pulsar_client.close()
+        logger.info("Bid listener thread shut down.", agent_id=agent_id)
+
+
 # --- NEW: Function to run the AgentSandbox service ---
 def run_sandbox_service():
     """Runs the AgentSandbox FastAPI app in a separate thread."""
@@ -603,6 +664,7 @@ def setup_default_agent(config: dict, vault_client: VaultClient):
     # Register Goal Creation tool
     toolbox.register_tool(create_goal_tool)
     toolbox.register_tool(await_goal_tool)
+    toolbox.register_tool(estimate_cost_tool) # Register the new tool
 
     return toolbox, ContextManager(config=config, vault_client=vault_client)
 
@@ -769,6 +831,16 @@ def run_agent():
 
             # Start the AgentSandbox service
             threading.Thread(target=run_sandbox_service, daemon=True).start()
+
+            # --- Start the Bid Listener Thread ---
+            agent_id = os.getenv("AGENT_ID", "default-agent") # Assume agent ID is in env
+            personality = os.getenv("AGENT_PERSONALITY", "default") # Assume personality is in env
+            bid_listener_thread = threading.Thread(
+                target=run_bid_listener,
+                args=(agent_id, personality, default_toolbox), # Using default toolbox for now
+                daemon=True
+            )
+            bid_listener_thread.start()
 
 
     except Exception as e:

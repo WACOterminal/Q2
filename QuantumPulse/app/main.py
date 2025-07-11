@@ -8,6 +8,7 @@ import threading
 import time
 import random
 import json
+from pulsar.schema import BytesSchema
 
 from app.api.endpoints import inference, fine_tuning, chat
 from app.core.pulsar_client import PulsarManager
@@ -16,6 +17,7 @@ from app.core.config import config
 from shared.opentelemetry.tracing import setup_tracing
 from shared.observability.logging_config import setup_logging
 from shared.observability.metrics import setup_metrics
+from app.stream_processors.qgan_handler import start_qgan_handler, stop_qgan_handler
 
 # --- Logging and Metrics Setup ---
 setup_logging()
@@ -44,7 +46,7 @@ class MarketDataProducer(threading.Thread):
 
     def run(self):
         self._running = True
-        producer = self.client.create_producer(self.topic)
+        producer = self.client.get_producer(self.topic, schema=BytesSchema())
         stocks = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"]
         prices = {s: random.uniform(150, 2000) for s in stocks}
 
@@ -95,12 +97,16 @@ async def lifespan(app: FastAPI):
 
     # --- NEW: Start the market data producer ---
     market_data_topic = "persistent://public/default/market-data"
-    market_producer = MarketDataProducer(pulsar_manager_module.pulsar_manager.client, market_data_topic)
+    market_producer = MarketDataProducer(pulsar_manager_module.pulsar_manager, market_data_topic)
     market_producer.start()
+
+    # --- NEW: Start the QGAN command handler ---
+    start_qgan_handler()
     
     yield
     
     logger.info("QuantumPulse API shutting down...")
+    stop_qgan_handler() # Stop the QGAN handler
     market_producer.stop()
     market_producer.join()
     pulsar_manager_module.pulsar_manager.close()

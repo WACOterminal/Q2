@@ -16,7 +16,8 @@ from managerQ.app.config import settings
 from shared.pulsar_tracing import inject_trace_context, extract_trace_context
 from opentelemetry import trace
 from shared.observability.metrics import WORKFLOW_COMPLETED_COUNTER, WORKFLOW_DURATION_HISTOGRAM, TASK_COMPLETED_COUNTER
-from managerQ.app.dependencies import get_kg_client # Import the dependency provider
+from managerQ.app.dependencies import get_kg_client, get_qpulse_client # Import the dependency provider
+from agentQ.app.guardian_agent import critique_action as guardian_critique_action # Import the critique function
 from managerQ.app.core.observability_manager import observability_manager
 
 logger = logging.getLogger(__name__)
@@ -31,10 +32,10 @@ class WorkflowExecutor:
     def __init__(self):
         self._running = False
         self._thread: Optional[threading.Thread] = None
-        self._pulsar_client: pulsar.Client = None
-        self._task_producer: pulsar.Producer = None
-        self._conditional_producer: pulsar.Producer = None
-        self._status_consumer: pulsar.Consumer = None
+        self._pulsar_client: Optional[pulsar.Client] = None
+        self._task_producer: Optional[pulsar.Producer] = None
+        self._conditional_producer: Optional[pulsar.Producer] = None
+        self._status_consumer: Optional[pulsar.Consumer] = None
         self._jinja_env = jinja2.Environment()
         self.task_dispatcher = task_dispatcher
 
@@ -78,7 +79,7 @@ class WorkflowExecutor:
             workflow_manager.update_workflow(workflow)
             logger.info(f"Workflow '{workflow_id}' has been resumed.")
             # Kick off processing again
-            self.process_workflow(workflow)
+            asyncio.run(self.process_workflow(workflow))
             asyncio.run(observability_manager.broadcast({"type": "WORKFLOW_UPDATE", "payload": workflow.dict()}))
 
     def cancel_workflow(self, workflow_id: str):
@@ -207,6 +208,24 @@ class WorkflowExecutor:
                 await self._handle_task_failure(workflow_id, task_id, final_result)
                 return # Stop normal processing for this failed task
 
+            # >>> NEW: Intercept COMPLETED status for ethical review <<<
+            workflow = workflow_manager.get_workflow(workflow_id) # Get workflow once
+            if not workflow:
+                logger.error(f"Could not find workflow {workflow_id} for status update.")
+                return
+
+            if status == TaskStatus.COMPLETED:
+                task_to_review = workflow.get_task(task_id)
+                if task_to_review and not task_to_review.bypass_ethical_review:
+                    review_status, review_reason = await self._perform_ethical_review(task_to_review, workflow, final_result)
+                    
+                    if review_status == EthicalReviewStatus.VETOED:
+                        logger.warning(f"Guardian VETOED task {task_id} in workflow {workflow_id}. Reason: {review_reason}")
+                        # Update task status to FAILED and trigger the failure handling logic
+                        workflow_manager.update_task_status(workflow_id, task_id, TaskStatus.FAILED, review_reason, thought)
+                        await self._handle_task_failure(workflow_id, task_id, review_reason)
+                        return # Stop normal processing
+
             # Instrument task status metric
             if status and status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
                 TASK_COMPLETED_COUNTER.labels(status=status.value).inc()
@@ -214,13 +233,14 @@ class WorkflowExecutor:
             # Update task with both thought and result
             workflow_manager.update_task_status(workflow_id, task_id, status, final_result, thought)
 
-            workflow = workflow_manager.get_workflow(workflow_id)
             if workflow and workflow.status == WorkflowStatus.RUNNING:
                 await self.process_workflow(workflow)
 
     async def _handle_task_failure(self, workflow_id: str, task_id: str, result: str):
         """
-        Handles a failed task by dispatching to the reflector agent to generate a corrective plan.
+        Handles a failed task. If retries are available, it constructs a new prompt
+        with context about the failure and re-dispatches the task. Otherwise, it
+        fails the workflow.
         """
         workflow = workflow_manager.get_workflow(workflow_id)
         if not workflow:
@@ -228,45 +248,64 @@ class WorkflowExecutor:
             return
 
         failed_task = workflow.get_task(task_id)
-        if not failed_task:
-            logger.error(f"Cannot handle failure for task '{task_id}': not found in workflow.")
+        if not failed_task or not isinstance(failed_task, WorkflowTask):
+            logger.error(f"Cannot handle failure for task '{task_id}': not found or not a valid task in workflow.")
+            # Fail the workflow if we can't find the task to retry
+            workflow.status = WorkflowStatus.FAILED
+            workflow_manager.update_workflow(workflow)
             return
 
-        logger.info(f"Generating corrective plan for failed task '{task_id}'.")
+        failed_task.retry_count += 1
+        logger.info(f"Handling failure for task {task_id}. Retry attempt {failed_task.retry_count} of {failed_task.max_retries}.")
+
+        if failed_task.retry_count > failed_task.max_retries:
+            logger.error(f"Task {task_id} has exceeded max retries. Failing workflow {workflow_id}.")
+            workflow.status = WorkflowStatus.FAILED
+            workflow_manager.update_workflow(workflow)
+            # Broadcast failure event
+            await observability_manager.broadcast({"type": "WORKFLOW_UPDATE", "payload": workflow.dict()})
+            return
+
+        # Construct a new prompt for the retry
+        correction_prompt = f"""
+        A previous attempt to execute this task failed. You must correct the approach.
         
+        Original Prompt:
+        ---
+        {failed_task.prompt}
+        ---
+
+        Reason for Failure / Veto:
+        ---
+        {result}
+        ---
+        
+        Please analyze the reason for failure and provide a corrected plan or action.
+        Your output must follow the original format and constraints.
+        """
+
         try:
-            # Create the prompt for the reflector agent
-            prompt = f"""
-            Original Goal: {workflow.original_prompt}
-            Failed Task: {failed_task.json()}
-            """
-            
-            # Dispatch to the reflector agent and await the new plan
-            correction_task_id = self.task_dispatcher.dispatch_task(
-                prompt=prompt,
-                agent_personality="reflector_agent"
+            # Re-dispatch the task with the new correction prompt.
+            # We keep the original task_id to track it.
+            self.task_dispatcher.dispatch_task(
+                personality=failed_task.agent_personality,
+                prompt=correction_prompt,
+                workflow_id=workflow_id,
+                # Pass through other relevant properties
             )
-            new_plan_json_str = await self.task_dispatcher.await_task_result(correction_task_id, timeout=60)
             
-            new_tasks_data = json.loads(new_plan_json_str)
+            # Reset the task status to PENDING so it can be picked up again
+            workflow_manager.update_task_status(workflow_id, task_id, TaskStatus.PENDING, result=f"Retrying after failure: {result}")
+            logger.info(f"Re-dispatched task {task_id} for retry.")
             
-            # Patch the workflow with the new plan
-            if new_tasks_data:
-                workflow_manager.patch_workflow(workflow_id, task_id, new_tasks_data)
-                logger.info(f"Successfully patched workflow '{workflow_id}'. Resuming execution.")
-                
-                # Re-process the now-patched workflow to dispatch the new tasks
-                patched_workflow = workflow_manager.get_workflow(workflow_id)
-                await self.process_workflow(patched_workflow)
-            else:
-                logger.warning("Reflector agent returned an empty plan. Failing workflow.")
-                workflow.status = WorkflowStatus.FAILED
-                workflow_manager.update_workflow(workflow)
+            # Immediately re-process the workflow to see if the retried task can run
+            await self.process_workflow(workflow)
 
         except Exception as e:
             logger.error(f"Self-correction failed for task '{task_id}': {e}", exc_info=True)
             workflow.status = WorkflowStatus.FAILED
             workflow_manager.update_workflow(workflow)
+
 
     async def process_workflow(self, workflow: Workflow):
         """
@@ -516,7 +555,7 @@ class WorkflowExecutor:
         # --- NEW: Ethical Review Gate ---
         if self._is_critical_task(task):
             logger.info("Critical task requires ethical review", task_id=task.task_id)
-            review_status, review_details = await self._perform_ethical_review(task, workflow)
+            review_status, review_details = await self._perform_ethical_review(task, workflow, task.result)
             
             if review_status == EthicalReviewStatus.VETOED:
                 logger.warning("Ethical review VETOED, halting workflow.", task_id=task.task_id, details=review_details)
@@ -616,49 +655,74 @@ class WorkflowExecutor:
         return context
 
     def _is_critical_task(self, task: WorkflowTask) -> bool:
-        """Determines if a task requires ethical review."""
-        # A more sophisticated implementation would analyze the tools and prompt.
-        # For now, we'll flag tasks assigned to devops or security agents.
-        critical_personalities = ["devops", "security_analyst"]
-        return task.agent_personality in critical_personalities
+        """Determines if a task is critical based on its properties or context."""
+        # Simple logic: check for a 'critical' tag or a specific tool.
+        # This could be expanded significantly.
+        return "critical" in task.tags or task.tool_name in {"delete_production_database"}
 
-    async def _perform_ethical_review(self, task: WorkflowTask, workflow: Workflow) -> Tuple[EthicalReviewStatus, str]:
-        """Dispatches a task to a squad of Guardian agents and awaits their verdict."""
-        proposed_plan = {
+
+    async def _perform_ethical_review(self, task: WorkflowTask, workflow: Workflow, task_result: str) -> Tuple[EthicalReviewStatus, str]:
+        """
+        Sends the proposed action (represented by the task and its result) to the Guardian Agent for review.
+        """
+        # We only review tasks that have a tangible, potentially impactful result.
+        if not task_result or not self._is_critical_task(task):
+            return EthicalReviewStatus.APPROVED, "Task is not critical or has no result; review bypassed."
+
+        logger.info(f"Submitting task {task.task_id} for ethical review...")
+
+        proposed_action_plan = {
+            "workflow_id": workflow.workflow_id,
             "task_id": task.task_id,
-            "agent_personality": task.agent_personality,
-            "prompt": task.prompt,
-            "workflow_id": workflow.workflow_id
+            "task_prompt": task.prompt,
+            "tool_name": task.tool_name,
+            "parameters": task.parameters,
+            "proposed_result": task_result
+        }
+
+        try:
+            # Get clients using dependency injectors
+            qpulse_client = get_qpulse_client()
+            llm_config = {"model": "q-pulse-guardian-v1"} # Use a specialized model for this
+
+            # Call the guardian agent's critique function
+            critique = await guardian_critique_action(proposed_action_plan, qpulse_client, llm_config)
+
+            if critique["verdict"] == "VETO":
+                return EthicalReviewStatus.VETOED, critique["reasoning"]
+            else:
+                return EthicalReviewStatus.APPROVED, critique["reasoning"]
+
+        except Exception as e:
+            logger.error(f"Ethical review for task {task.task_id} failed with an exception: {e}", exc_info=True)
+            # Fail-safe: Veto the action if the review process itself fails.
+            return EthicalReviewStatus.VETOED, "The ethical review process encountered an internal error."
+
+
+    def _evaluate_conditional(self, block: ConditionalBlock, workflow: Workflow):
+        """
+        Evaluates the condition for a conditional block and marks the appropriate
+        """
+        logger.info(f"Publishing conditional evaluation for block '{block.task_id}' to Pulsar.")
+        
+        eval_context = self._get_evaluation_context(workflow)
+
+        conditional_payload = {
+            "block_id": block.task_id,
+            "workflow_id": workflow.workflow_id,
+            "evaluation_context": eval_context,
+            "branches": [branch.dict() for branch in block.branches]
         }
         
-        review_prompt = f"Please review the following proposed action plan for ethical concerns against the platform constitution: {json.dumps(proposed_plan, indent=2)}"
-        
-        # Dispatch to a squad of 3 guardians for redundancy and consensus
-        guardian_task_ids = [
-            self.task_dispatcher.dispatch_task(prompt=review_prompt, agent_personality="guardian_agent")
-            for _ in range(3)
-        ]
-        
-        # Await all results
-        results = await asyncio.gather(
-            *[self.task_dispatcher.await_task_result(task_id, timeout=120) for task_id in guardian_task_ids]
+        properties = inject_trace_context({})
+        self._conditional_producer.send(
+            json.dumps(conditional_payload).encode('utf-8'),
+            properties=properties
         )
         
-        # Tally the votes
-        vetoes = 0
-        reasons = []
-        for result_json in results:
-            if result_json:
-                decision_data = json.loads(json.loads(result_json)["result"])
-                if decision_data.get("decision") == "VETO":
-                    vetoes += 1
-                    reasons.append(decision_data.get("reasoning"))
-
-        # Majority vote determines the outcome
-        if vetoes >= 2:
-            return EthicalReviewStatus.VETOED, "; ".join(reasons)
-        else:
-            return EthicalReviewStatus.APPROVED, "Review passed."
+        # We don't mark as complete here anymore. The worker will do that.
+        # We can, however, mark it as "evaluating" if we add such a status.
+        # For now, we'll leave it as PENDING until the worker picks it up.
 
 # Singleton instance
 workflow_executor = WorkflowExecutor() 

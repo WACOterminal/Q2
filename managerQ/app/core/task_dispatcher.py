@@ -7,9 +7,14 @@ from enum import Enum
 from dataclasses import dataclass, field
 from collections import defaultdict, deque
 import heapq
+import threading
+import json
 
+import pulsar
+from pulsar.schema import JsonSchema
 from .agent_registry import AgentRegistry
-from shared.pulsar_client import SharedPulsarClient
+from shared.pulsar_client.client import SharedPulsarClient, PULSAR_URL
+from shared.q_messaging_schemas.schemas import TaskAnnouncement, AgentBid
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +36,7 @@ class RoutingStrategy(str, Enum):
     PRIORITY_BASED = "priority_based"
     AFFINITY_BASED = "affinity_based"
     RESOURCE_AWARE = "resource_aware"
+    BIDDING = "bidding"
 
 @dataclass
 class TaskRequest:
@@ -216,7 +222,7 @@ class TaskDispatcher:
                 continue
             
             # Try to find an agent for the task
-            agent = self._select_best_agent(task_request)
+            agent = await self._select_best_agent(task_request)
             if agent:
                 try:
                     self._dispatch_to_agent(task_request, agent)
@@ -231,7 +237,7 @@ class TaskDispatcher:
                     heapq.heappush(self.task_queue, task_request)
                 break
     
-    def _select_best_agent(self, task_request: TaskRequest):
+    async def _select_best_agent(self, task_request: TaskRequest):
         """Select the best agent based on routing strategy and requirements"""
         available_agents = [
             agent for agent in self.agent_registry.get_agents_by_personality(task_request.personality)
@@ -252,9 +258,115 @@ class TaskDispatcher:
             return self._affinity_based_selection(available_agents, task_request)
         elif self.routing_strategy == RoutingStrategy.RESOURCE_AWARE:
             return self._resource_aware_selection(available_agents, task_request)
+        elif self.routing_strategy == RoutingStrategy.BIDDING:
+            return await self._bidding_selection(task_request)
         else:
             return available_agents[0]  # Fallback
     
+    async def _bidding_selection(self, task_request: TaskRequest):
+        """
+        Selects an agent by broadcasting a task announcement and collecting bids.
+        This runs the blocking Pulsar consumer in a separate thread to avoid blocking asyncio.
+        """
+        announcement_topic = "persistent://public/default/task-announcements"
+        bids_topic = "persistent://public/default/task-bids"
+        bid_window_seconds = 2.0
+        
+        task_announcement = TaskAnnouncement(
+            task_id=task_request.task_id,
+            task_prompt=task_request.prompt,
+            task_personality=task_request.personality,
+            broadcast_time=int(time.time() * 1000),
+            bid_window_seconds=bid_window_seconds,
+            workflow_id=task_request.workflow_id,
+            user_id=task_request.user_id,
+            tools_required=list(task_request.tools_required),
+            resource_requirements={k: str(v) for k, v in task_request.resource_requirements.items()}
+        )
+
+        try:
+            # Manually construct dict from record for compatibility with publish_message
+            announcement_dict = {
+                "task_id": task_announcement.task_id,
+                "task_prompt": task_announcement.task_prompt,
+                "task_personality": task_announcement.task_personality,
+                "broadcast_time": task_announcement.broadcast_time,
+                "bid_window_seconds": task_announcement.bid_window_seconds,
+                "workflow_id": task_announcement.workflow_id,
+                "user_id": task_announcement.user_id,
+                "tools_required": task_announcement.tools_required,
+                "resource_requirements": task_announcement.resource_requirements
+            }
+            self.pulsar_client.publish_message(announcement_topic, announcement_dict)
+            logger.info(f"Broadcasted task announcement for task {task_request.task_id}")
+        except Exception as e:
+            logger.error(f"Failed to publish task announcement for {task_request.task_id}: {e}")
+            return self._fallback_selection(task_request)
+
+        bids = []
+        # Run the synchronous consumer logic in a separate thread
+        def bid_collector_thread():
+            local_pulsar_client = None
+            consumer = None
+            try:
+                local_pulsar_client = pulsar.Client(PULSAR_URL)
+                consumer = local_pulsar_client.subscribe(
+                    bids_topic, 
+                    f"dispatcher-bids-{task_request.task_id}", 
+                    schema=JsonSchema(AgentBid)
+                )
+                
+                start_time = time.time()
+                while time.time() - start_time < bid_window_seconds:
+                    try:
+                        # Use receive with a timeout
+                        msg = consumer.receive(timeout_millis=100)
+                        bid = msg.value()
+                        if bid.task_id == task_request.task_id:
+                            bids.append(bid)
+                        consumer.acknowledge(msg)
+                    except pulsar.Timeout:
+                        continue # No message, continue waiting
+                    except Exception as e:
+                        logger.error(f"Error processing bid message: {e}")
+
+            except Exception as e:
+                logger.error(f"Error in bid collector thread for task {task_request.task_id}: {e}")
+            finally:
+                if consumer:
+                    consumer.close()
+                if local_pulsar_client:
+                    local_pulsar_client.close()
+
+        collector = threading.Thread(target=bid_collector_thread)
+        collector.start()
+        await asyncio.sleep(bid_window_seconds + 0.5) # Wait for thread to finish
+        collector.join()
+        
+        logger.info(f"Bid window closed for task {task_request.task_id}. Collected {len(bids)} bids.")
+
+        if not bids:
+            logger.warning(f"No bids received for task {task_request.task_id}. Falling back.")
+            return self._fallback_selection(task_request)
+
+        winning_bid = min(bids, key=lambda b: b.bid_value)
+        winning_agent = self.agent_registry.get_agent(winning_bid.agent_id)
+
+        if not winning_agent:
+            logger.error(f"Winning agent {winning_bid.agent_id} not found in registry. Falling back.")
+            return self._fallback_selection(task_request)
+        
+        logger.info(f"Agent {winning_agent.agent_id} won bid for task {task_request.task_id} with value {winning_bid.bid_value}")
+        return winning_agent
+
+    def _fallback_selection(self, task_request: TaskRequest):
+        """Fallback to a default selection strategy if bidding fails."""
+        logger.info(f"Falling back to priority-based selection for task {task_request.task_id}")
+        return self._priority_based_selection(
+            [agent for agent in self.agent_registry.get_agents_by_personality(task_request.personality)],
+            task_request
+        )
+
     def _agent_can_handle_task(self, agent, task_request: TaskRequest) -> bool:
         """Check if agent can handle the task considering all constraints"""
         # Check circuit breaker
