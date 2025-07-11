@@ -283,6 +283,30 @@ export const getPredictiveScalingReport = async (): Promise<any[]> => {
     return response.json();
 };
 
+export const getVetoedWorkflows = async (): Promise<any[]> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+    const response = await fetch(`${API_BASE_URL}/v1/governance/vetoed-workflows`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch vetoed workflows');
+    return response.json();
+};
+
+export const getVetoedWorkflowDetails = async (workflowId: string): Promise<any> => {
+    const token = keycloak.token; // Assuming keycloak.token is available here
+    if (!token) {
+        throw new Error("Authentication token not found.");
+    }
+    const response = await fetch(`${API_BASE_URL}/v1/governance/vetoed-workflows/${workflowId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch vetoed workflow details');
+    return response.json();
+};
+
 // --- WebSocket Management ---
 
 let dashboardSocketClient: W3CWebSocket | null = null;

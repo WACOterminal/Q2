@@ -6,6 +6,8 @@ from fastapi import WebSocket
 import json
 import random
 import uuid
+import time
+from pyignite import Client
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +40,20 @@ class ObservabilityManager:
         self._links: Dict[str, Link] = {}
         self._is_running = False
         self._broadcaster_task: asyncio.Task = None
+        self._ignite_client = Client()
+        self._event_history_cache = None
+
+    def _connect_to_ignite(self):
+        try:
+            if not self._ignite_client.is_connected():
+                self._ignite_client.connect([("127.0.0.1", 10800)]) # Hardcoded for now
+                self._event_history_cache = self._ignite_client.get_or_create_cache("observability_event_history")
+                logger.info("ObservabilityManager connected to Ignite.")
+        except Exception as e:
+            logger.error("ObservabilityManager failed to connect to Ignite", exc_info=True)
 
     async def connect(self, websocket: WebSocket):
+        self._connect_to_ignite() # Ensure connection is active
         await websocket.accept()
         self.active_connections.append(websocket)
         logger.info(f"New client connected. Total clients: {len(self.active_connections)}")
@@ -80,14 +94,20 @@ class ObservabilityManager:
             logger.info("Observability broadcaster stopped.")
 
     async def _broadcast_loop(self):
-        """The main loop for generating and broadcasting world state updates."""
+        """The main loop for generating, broadcasting, and persisting updates."""
         while self._is_running:
             try:
                 # In a real system, this would be driven by actual events from the platform.
                 # Here, we simulate events for demonstration.
                 events = self._simulate_events()
                 if events:
-                    message = {"type": "TICK", "payload": events}
+                    message = {"type": "TICK", "payload": events, "timestamp": time.time()}
+                    
+                    # Persist the tick to Ignite
+                    if self._event_history_cache:
+                        # Use timestamp as key for time-series-like retrieval
+                        self._event_history_cache.put(message["timestamp"], json.dumps(message))
+                    
                     await self.broadcast(message)
                 
                 await asyncio.sleep(1) # Broadcast every second
