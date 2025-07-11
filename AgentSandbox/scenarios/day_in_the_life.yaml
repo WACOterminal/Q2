@@ -1,0 +1,67 @@
+name: "Day-in-the-Life: A Complex Multi-Agent Scenario"
+description: "A full E2E test that simulates a cascading event, requiring FinOps, Security, and DevOps agents to collaborate."
+
+services:
+  managerq: "http://managerq:80"
+
+steps:
+  - name: "Trigger FinOps Anomaly"
+    id: "trigger_finops"
+    action: "http_request"
+    # In a real test, we would generate a real cost spike. Here, we trigger the workflow.
+    params:
+      method: "POST"
+      url: "{{ services.managerq }}/v1/workflows/run"
+      json:
+        workflow_id: "wf_finops_daily_scan"
+    assertions:
+      - type: "status_code"
+        expected_value: 202
+
+  - name: "Wait for FinOps Report and Trigger Security Scan"
+    id: "trigger_security"
+    action: "http_request"
+    # This step simulates the outcome of the FinOps agent finding an anomaly
+    # and deciding the cause might be a compromised service, thus triggering a security scan.
+    params:
+      method: "POST"
+      url: "{{ services.managerq }}/v1/workflows/run"
+      json:
+        workflow_id: "wf_security_code_scan"
+    assertions:
+      - type: "status_code"
+        expected_value: 202
+
+  - name: "Wait for Security Report and Trigger Remediation"
+    id: "trigger_remediation"
+    action: "http_request"
+    # This step simulates the security agent finding a critical vulnerability
+    # and triggering a workflow to have it fixed by a DevOps agent.
+    # This uses a generic workflow that would delegate to the devops agent.
+    params:
+      method: "POST"
+      url: "{{ services.managerq }}/v1/workflows/run"
+      json:
+        workflow_id: "wf_triage_bug_report"
+        context_overrides:
+          prompt: "A critical vulnerability was found in the 'AuthQ' service. A hardcoded secret was discovered. Please remove it and replace it with a call to Vault."
+          source_id: "security-scan-123"
+    assertions:
+      - type: "status_code"
+        expected_value: 202
+
+  - name: "Verify Final State"
+    id: "verify_state"
+    action: "http_request"
+    # This final step would poll the workflow triggered in the previous step
+    # and assert that it completed successfully. This requires enhancing the
+    # sandbox runner to handle polling, which is out of scope for now.
+    params:
+      method: "GET"
+      url: "{{ services.managerq }}/v1/workflows/status/{{ steps.trigger_remediation.outputs.workflow_instance_id }}"
+    assertions:
+      - type: "status_code"
+        expected_value: 200
+      - type: "json_response"
+        path: "status"
+        expected_value: "COMPLETED" 

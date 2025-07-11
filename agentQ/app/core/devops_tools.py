@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from elasticsearch import Elasticsearch
 from kubernetes import client, config
 import structlog
+from kubernetes.client.rest import ApiException
+import base64
 
 from agentQ.app.core.toolbox import Tool
 from shared.q_knowledgegraph_client import kgq_client
@@ -514,10 +516,62 @@ k8s_get_events_tool = Tool(
     func=kubernetes_get_events
 )
 
+def update_k8s_secret(secret_name: str, namespace: str, new_data_json: str, config: dict = None) -> str:
+    """
+    Updates a Kubernetes secret with new data.
+
+    Args:
+        secret_name (str): The name of the secret to update.
+        namespace (str): The namespace of the secret.
+        new_data_json (str): A JSON string containing the key-value pairs to update in the secret's data field.
+                             Values must be base64 encoded by the caller if necessary.
+
+    Returns:
+        str: A confirmation message or an error.
+    """
+    logger.info("Updating Kubernetes secret", secret=secret_name, namespace=namespace)
+    try:
+        new_data = json.loads(new_data_json)
+        
+        # The data in a K8s secret must be base64 encoded strings.
+        # The caller (the agent) is responsible for this encoding.
+        encoded_data = {k: base64.b64encode(v.encode()).decode() for k, v in new_data.items()}
+
+        api = client.CoreV1Api()
+        
+        # First, get the existing secret to patch
+        existing_secret = api.read_namespaced_secret(name=secret_name, namespace=namespace)
+        
+        # Update the data field
+        if not existing_secret.data:
+            existing_secret.data = {}
+        existing_secret.data.update(encoded_data)
+
+        # Patch the secret
+        api.patch_namespaced_secret(name=secret_name, namespace=namespace, body=existing_secret)
+        
+        return f"Secret '{secret_name}' in namespace '{namespace}' updated successfully."
+
+    except ApiException as e:
+        logger.error("Kubernetes API error while updating secret", error=str(e))
+        return f"Error: Kubernetes API error: {e.body}"
+    except json.JSONDecodeError:
+        return "Error: Invalid JSON format for new_data_json."
+    except Exception as e:
+        logger.error("Unexpected error updating K8s secret", exc_info=True)
+        return f"Error: An unexpected error occurred: {e}"
+
+update_secret_tool = Tool(
+    name="update_k8s_secret",
+    description="Updates the data field of a specified Kubernetes secret.",
+    func=update_k8s_secret
+)
+
 # Add the new tool to the list of devops tools
 devops_tools = [
     k8s_get_deployments_tool,
     k8s_get_pods_tool,
     k8s_restart_deployment_tool,
-    k8s_get_events_tool
+    k8s_get_events_tool,
+    update_secret_tool
 ] 
