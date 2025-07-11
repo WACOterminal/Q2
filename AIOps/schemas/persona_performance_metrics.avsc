@@ -1,0 +1,62 @@
+{
+    "type": "record",
+    "name": "PersonaPerformanceMetrics",
+    "namespace": "com.qagi.agent",
+    "fields": [
+        {
+            "name": "persona_id",
+            "type": "string"
+        },
+        {
+            "name": "agent_id",
+            "type": "string"
+        },
+        {
+            "name": "context_type",
+            "type": "string"
+        },
+        {
+            "name": "task_completion_rate",
+            "type": "double"
+        },
+        {
+            "name": "user_satisfaction",
+            "type": "double"
+        },
+        {
+            "name": "response_quality",
+            "type": "double"
+        },
+        {
+            "name": "collaboration_effectiveness",
+            "type": "double"
+        },
+        {
+            "name": "learning_progress",
+            "type": "double"
+        },
+        {
+            "name": "adaptability_score",
+            "type": "double"
+        },
+        {
+            "name": "consistency_score",
+            "type": "double"
+        },
+        {
+            "name": "innovation_score",
+            "type": "double"
+        },
+        {
+            "name": "sample_size",
+            "type": "int"
+        },
+        {
+            "name": "computed_at",
+            "type": {
+                "type": "long",
+                "logicalType": "timestamp-millis"
+            }
+        }
+    ]
+} 

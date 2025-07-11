@@ -16,7 +16,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Union
+from typing import Dict, List, Optional, Any, Tuple, Set, Union
 from dataclasses import dataclass, asdict
 from enum import Enum
 import json
@@ -26,6 +26,7 @@ from pathlib import Path
 import pickle
 import joblib
 from collections import defaultdict
+import os
 
 # ML Libraries
 import torch
@@ -121,6 +122,8 @@ class ModelCandidate:
     feature_importance: Optional[Dict[str, float]] = None
     cross_validation_scores: Optional[List[float]] = None
     created_at: datetime = None
+    artifact_path: Optional[str] = None # Added field
+    metadata: Optional[Dict[str, Any]] = None # Added field
 
 @dataclass
 class FeatureEngineeringConfig:
@@ -140,7 +143,8 @@ class AutoMLService:
     
     def __init__(self, 
                  model_storage_path: str = "models/automl",
-                 spark_config: Optional[Dict[str, Any]] = None):
+                 spark_config: Optional[Dict[str, Any]] = None,
+                 kg_client: Optional[KnowledgeGraphClient] = None): # Added kg_client parameter
         self.model_storage_path = Path(model_storage_path)
         self.model_storage_path.mkdir(parents=True, exist_ok=True)
         
@@ -187,6 +191,9 @@ class AutoMLService:
         # MLflow tracking
         self.mlflow_tracking_uri = None
         
+        # Knowledge Graph client
+        self.kg_client = kg_client or KnowledgeGraphClient(base_url=os.getenv("KGQ_API_URL", "http://knowledgegraphq:8000")) # Initialize KG client
+
     async def initialize(self):
         """Initialize the AutoML service"""
         logger.info("Initializing AutoML Service")
@@ -202,6 +209,9 @@ class AutoMLService:
         
         # Load existing experiments
         await self._load_experiments()
+
+        # Initialize Knowledge Graph client
+        # self.kg_client.initialize() is not awaited as there is no initialize method
         
         # Start background tasks
         self.background_tasks.add(asyncio.create_task(self._experiment_monitor()))
@@ -227,6 +237,9 @@ class AutoMLService:
         # Stop Spark session
         if self.spark_session:
             self.spark_session.stop()
+        
+        # Close Knowledge Graph client
+        await self.kg_client.aclose() # Close KG client
         
         logger.info("AutoML Service shut down successfully")
     
@@ -279,6 +292,9 @@ class AutoMLService:
         
         self.active_experiments[experiment_id] = experiment
         
+        # Store experiment in Knowledge Graph
+        await self._store_experiment_run_in_kg(experiment) # New: Store in KG
+
         # Start experiment in background
         asyncio.create_task(self._run_automl_experiment(experiment))
         
@@ -298,7 +314,9 @@ class AutoMLService:
         return experiment_id
     
     async def _run_automl_experiment(self, experiment: AutoMLExperiment):
-        """Run AutoML experiment"""
+        """
+        Run AutoML experiment
+        """
         
         try:
             experiment.status = AutoMLStatus.RUNNING
@@ -337,6 +355,18 @@ class AutoMLService:
             
             # Generate results summary
             experiment.results_summary = await self._generate_results_summary(experiment)
+
+            # Create lineage in Knowledge Graph for the experiment run
+            # Assuming dataset_version_id and feature_ids can be extracted from dataset_config or inferred
+            dataset_version_id = experiment.dataset_config.get("version_id") # Example: Extract from config
+            feature_ids = experiment.dataset_config.get("feature_ids") # Example: Extract from config
+
+            await self._create_experiment_lineage_in_kg(
+                experiment_id=experiment.experiment_id,
+                model_version_id=experiment.best_model.get("model_id") if experiment.best_model else None,
+                dataset_version_id=dataset_version_id,
+                feature_ids=feature_ids
+            ) # New: Create lineage
             
             logger.info(f"Completed AutoML experiment: {experiment.experiment_id}")
             
@@ -365,7 +395,9 @@ class AutoMLService:
         X_test: np.ndarray,
         y_test: np.ndarray
     ):
-        """Run optimization for traditional ML models"""
+        """
+        Run optimization for traditional ML models
+        """
         
         def objective(trial):
             # Select model type
@@ -419,7 +451,9 @@ class AutoMLService:
                 training_time=training_time,
                 model_size=len(pickle.dumps(model)),
                 cross_validation_scores=cv_scores.tolist(),
-                created_at=datetime.utcnow()
+                created_at=datetime.utcnow(),
+                artifact_path=str(self.model_storage_path / f"{experiment.experiment_id}_{model_name}_{trial.number}.pkl"), # Populate artifact_path
+                metadata={"trial_number": trial.number, "framework": "sklearn"}
             )
             
             # Store model candidate
@@ -445,7 +479,9 @@ class AutoMLService:
                     model_candidate, 
                     str(model_path), 
                     experiment.experiment_name,
-                    "sklearn"
+                    "sklearn",
+                    dataset_version_id=experiment.dataset_config.get("version_id"), # Pass dataset_version_id
+                    feature_ids=experiment.dataset_config.get("feature_ids") # Pass feature_ids
                 )
             
             # Log to MLflow
@@ -473,7 +509,7 @@ class AutoMLService:
         study.optimize(objective, n_trials=experiment.total_trials)
         
         logger.info(f"Completed {experiment.trials_completed} trials for experiment {experiment.experiment_id}")
-    
+
     async def _run_neural_network_optimization(
         self,
         experiment: AutoMLExperiment,
@@ -482,50 +518,74 @@ class AutoMLService:
         X_test: np.ndarray,
         y_test: np.ndarray
     ):
-        """Run optimization for neural network models"""
-        
+        """
+        Run optimization for neural network models
+        """
+        # Convert data to PyTorch tensors
+        X_train_tensor = torch.FloatTensor(X_train)
+        y_train_tensor = torch.LongTensor(y_train) # Assuming classification
+        X_test_tensor = torch.FloatTensor(X_test)
+        y_test_tensor = torch.LongTensor(y_test)
+
+        class SimpleNN(nn.Module):
+            def __init__(self, input_dim, n_layers, hidden_dim, output_dim):
+                super(SimpleNN, self).__init__()
+                layers = [nn.Linear(input_dim, hidden_dim), nn.ReLU()]
+                for _ in range(n_layers - 1):
+                    layers.append(nn.Linear(hidden_dim, hidden_dim))
+                    layers.append(nn.ReLU())
+                layers.append(nn.Linear(hidden_dim, output_dim))
+                self.model = nn.Sequential(*layers)
+
+            def forward(self, x):
+                return self.model(x)
+
         def objective(trial):
             # Neural network hyperparameters
-            n_layers = trial.suggest_int('n_layers', 2, 5)
-            layers = []
-            
-            input_size = X_train.shape[1]
-            
-            for i in range(n_layers):
-                if i == 0:
-                    layer_size = trial.suggest_int(f'layer_{i}_size', 64, 512)
-                    layers.append(nn.Linear(input_size, layer_size))
-                else:
-                    prev_size = layers[-1].out_features
-                    layer_size = trial.suggest_int(f'layer_{i}_size', 32, 256)
-                    layers.append(nn.Linear(prev_size, layer_size))
-                
-                layers.append(nn.ReLU())
-                layers.append(nn.Dropout(trial.suggest_float(f'dropout_{i}', 0.1, 0.5)))
-            
-            # Output layer
-            output_size = len(np.unique(y_train))
-            layers.append(nn.Linear(layers[-3].out_features, output_size))
-            
-            # Create model
-            model = nn.Sequential(*layers)
-            
-            # Training hyperparameters
-            lr = trial.suggest_float('lr', 1e-5, 1e-1, log=True)
-            batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128])
-            epochs = trial.suggest_int('epochs', 10, 100)
-            
-            # Train model
+            n_layers = trial.suggest_int('n_layers', 1, 3)
+            hidden_dim = trial.suggest_int('hidden_dim', 32, 128, step=32)
+            lr = trial.suggest_loguniform('lr', 1e-5, 1e-2)
+            batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
+            epochs = trial.suggest_int('epochs', 5, 20)
+
+            model = SimpleNN(X_train.shape[1], n_layers, hidden_dim, len(np.unique(y_train)))
+            optimizer = optim.Adam(model.parameters(), lr=lr)
+            criterion = nn.CrossEntropyLoss()
+
+            # Create DataLoader
+            train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
+            train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+            # Training loop
+            history = defaultdict(list)
             start_time = datetime.utcnow()
-            trained_model, history = self._train_pytorch_model(
-                model, X_train, y_train, X_test, y_test,
-                lr=lr, batch_size=batch_size, epochs=epochs
-            )
+            for epoch in range(epochs):
+                model.train()
+                for batch_X, batch_y in train_loader:
+                    optimizer.zero_grad()
+                    outputs = model(batch_X)
+                    loss = criterion(outputs, batch_y)
+                    loss.backward()
+                    optimizer.step()
+                
+                # Evaluate on test set
+                model.eval()
+                with torch.no_grad():
+                    outputs = model(X_test_tensor)
+                    loss = criterion(outputs, y_test_tensor)
+                    _, predicted = torch.max(outputs.data, 1)
+                    accuracy = accuracy_score(y_test_tensor.numpy(), predicted.numpy())
+                    history['val_loss'].append(loss.item())
+                    history['val_accuracy'].append(accuracy)
             training_time = (datetime.utcnow() - start_time).total_seconds()
-            
+
             # Evaluate model
-            score = history['val_accuracy'][-1]
-            
+            model.eval()
+            with torch.no_grad():
+                outputs = model(X_test_tensor)
+                _, predicted = torch.max(outputs.data, 1)
+                score = accuracy_score(y_test_tensor.numpy(), predicted.numpy())
+
             # Create model candidate
             model_candidate = ModelCandidate(
                 model_id=f"model_{uuid.uuid4().hex[:8]}",
@@ -534,17 +594,20 @@ class AutoMLService:
                 model_name="neural_network",
                 hyperparameters={
                     'n_layers': n_layers,
+                    'hidden_dim': hidden_dim,
                     'lr': lr,
                     'batch_size': batch_size,
                     'epochs': epochs
                 },
                 performance_metrics={
                     "test_score": score,
-                    "final_loss": history['val_loss'][-1]
+                    "final_loss": history['val_loss'][-1] if history['val_loss'] else None
                 },
                 training_time=training_time,
-                model_size=sum(p.numel() for p in trained_model.parameters()),
-                created_at=datetime.utcnow()
+                model_size=sum(p.numel() for p in model.parameters()),
+                created_at=datetime.utcnow(),
+                artifact_path=str(self.model_storage_path / f"{experiment.experiment_id}_neural_network_{trial.number}.pth"), # Populate artifact_path
+                metadata={"trial_number": trial.number, "framework": "pytorch"}
             )
             
             # Store model candidate
@@ -563,21 +626,23 @@ class AutoMLService:
                 
                 # Save best model
                 model_path = self.model_storage_path / f"{model_candidate.model_id}.pth"
-                torch.save(trained_model.state_dict(), model_path)
+                torch.save(model.state_dict(), model_path)
                 
                 # Register model in registry
                 await self._register_model_with_registry(
                     model_candidate, 
                     str(model_path), 
                     experiment.experiment_name,
-                    "pytorch"
+                    "pytorch",
+                    dataset_version_id=experiment.dataset_config.get("version_id"), # Pass dataset_version_id
+                    feature_ids=experiment.dataset_config.get("feature_ids") # Pass feature_ids
                 )
             
             # Log to MLflow
             with mlflow.start_run():
                 mlflow.log_params(model_candidate.hyperparameters)
                 mlflow.log_metrics(model_candidate.performance_metrics)
-                mlflow.pytorch.log_model(trained_model, "model")
+                mlflow.pytorch.log_model(model, "model")
             
             return score
         
@@ -593,301 +658,195 @@ class AutoMLService:
         study.optimize(objective, n_trials=experiment.total_trials)
         
         logger.info(f"Completed {experiment.trials_completed} trials for experiment {experiment.experiment_id}")
-    
-    # ===== SPARK INTEGRATION =====
-    
-    async def run_spark_automl_experiment(
-        self,
-        experiment_id: str,
-        dataset_path: str,
-        feature_cols: List[str],
-        label_col: str
-    ):
-        """Run AutoML experiment using Spark for distributed processing"""
-        
-        if not self.spark_session:
-            logger.error("Spark session not initialized")
-            return
-        
-        # Load data
-        df = self.spark_session.read.parquet(dataset_path)
-        
-        # Prepare features
-        assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
-        
-        # String indexer for labels
-        indexer = StringIndexer(inputCol=label_col, outputCol="label")
-        
-        # Model
-        rf = SparkRandomForest(featuresCol="features", labelCol="label")
-        
-        # Create pipeline
-        pipeline = Pipeline(stages=[assembler, indexer, rf])
-        
-        # Parameter grid
-        paramGrid = ParamGridBuilder() \
-            .addGrid(rf.numTrees, [10, 20, 50]) \
-            .addGrid(rf.maxDepth, [5, 10, 20]) \
-            .addGrid(rf.minInstancesPerNode, [1, 5, 10]) \
-            .build()
-        
-        # Cross validator
-        evaluator = MulticlassClassificationEvaluator(
-            labelCol="label",
-            predictionCol="prediction",
-            metricName="accuracy"
-        )
-        
-        crossval = CrossValidator(
-            estimator=pipeline,
-            estimatorParamMaps=paramGrid,
-            evaluator=evaluator,
-            numFolds=3
-        )
-        
-        # Fit model
-        cvModel = crossval.fit(df)
-        
-        # Get best model
-        bestModel = cvModel.bestModel
-        
-        logger.info(f"Completed Spark AutoML experiment: {experiment_id}")
-        
-        return bestModel
-    
-    # ===== UTILITY METHODS =====
-    
-    def _get_default_search_space(self, model_type: ModelType) -> Dict[str, Any]:
-        """Get default search space for model type"""
-        
+
+    async def _get_default_search_space(self, model_type: ModelType) -> Dict[str, Any]:
+        """Get default hyperparameter search space for a model type"""
         if model_type == ModelType.CLASSIFICATION:
             return {
                 "random_forest": {
-                    "n_estimators": (10, 200),
-                    "max_depth": (3, 20),
-                    "min_samples_split": (2, 20),
-                    "min_samples_leaf": (1, 10)
+                    "n_estimators": [100, 200, 300],
+                    "max_depth": [10, 20, None],
+                    "min_samples_leaf": [1, 2, 4]
                 },
                 "gradient_boosting": {
-                    "n_estimators": (50, 200),
-                    "learning_rate": (0.01, 0.3),
-                    "max_depth": (3, 10),
-                    "subsample": (0.8, 1.0)
+                    "n_estimators": [100, 200, 300],
+                    "learning_rate": [0.01, 0.1, 0.2],
+                    "max_depth": [3, 5, 7]
                 },
                 "logistic_regression": {
-                    "C": (0.001, 100.0),
-                    "penalty": ["l1", "l2"],
+                    "C": [0.1, 1.0, 10.0],
                     "solver": ["liblinear", "lbfgs"]
                 },
                 "svm": {
-                    "C": (0.001, 100.0),
-                    "kernel": ["rbf", "poly", "sigmoid"],
-                    "gamma": (0.001, 1.0)
+                    "C": [0.1, 1.0, 10.0],
+                    "kernel": ["linear", "rbf"]
+                },
+                "mlp": {
+                    "hidden_layer_sizes": [(50,), (100,), (50, 50)],
+                    "activation": ["relu", "tanh"],
+                    "alpha": [0.0001, 0.001, 0.01]
                 }
             }
-        
+        elif model_type == ModelType.REGRESSION:
+            return {
+                "linear_regression": {},
+                "random_forest_regressor": {
+                    "n_estimators": [100, 200, 300],
+                    "max_depth": [10, 20, None]
+                }
+            }
+        elif model_type == ModelType.NEURAL_NETWORK:
+            return {
+                "n_layers": [1, 2, 3],
+                "hidden_dim": [32, 64, 128],
+                "lr": [1e-5, 1e-4, 1e-3, 1e-2],
+                "batch_size": [32, 64, 128],
+                "epochs": [5, 10, 15, 20]
+            }
         return {}
-    
-    def _get_model_and_params(
-        self,
-        model_name: str,
-        trial: optuna.Trial,
-        search_space: Dict[str, Any]
-    ) -> Tuple[Any, Dict[str, Any]]:
-        """Get model instance and hyperparameters"""
-        
-        model_space = search_space.get(model_name, {})
+
+    def _get_model_and_params(self, model_name: str, trial: optuna.Trial, search_space: Dict[str, Any]):
+        """Get model instance and hyperparameters from Optuna trial"""
         hyperparameters = {}
-        
-        if model_name == "random_forest":
+        model = None
+
+        if model_name == 'random_forest':
+            n_estimators = trial.suggest_int('n_estimators', 50, 200)
+            max_depth = trial.suggest_int('max_depth', 5, 20) if trial.suggest_categorical('max_depth_none', [True, False]) else None
+            min_samples_leaf = trial.suggest_int('min_samples_leaf', 1, 5)
+            model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, min_samples_leaf=min_samples_leaf, random_state=self.config["random_state"])
             hyperparameters = {
-                "n_estimators": trial.suggest_int("n_estimators", *model_space.get("n_estimators", (10, 200))),
-                "max_depth": trial.suggest_int("max_depth", *model_space.get("max_depth", (3, 20))),
-                "min_samples_split": trial.suggest_int("min_samples_split", *model_space.get("min_samples_split", (2, 20))),
-                "min_samples_leaf": trial.suggest_int("min_samples_leaf", *model_space.get("min_samples_leaf", (1, 10))),
-                "random_state": self.config["random_state"]
+                'n_estimators': n_estimators,
+                'max_depth': max_depth,
+                'min_samples_leaf': min_samples_leaf
             }
-            model = RandomForestClassifier(**hyperparameters)
-        
-        elif model_name == "gradient_boosting":
+        elif model_name == 'gradient_boosting':
+            n_estimators = trial.suggest_int('n_estimators', 50, 200)
+            learning_rate = trial.suggest_loguniform('learning_rate', 1e-3, 1e-1)
+            max_depth = trial.suggest_int('max_depth', 3, 7)
+            model = GradientBoostingClassifier(n_estimators=n_estimators, learning_rate=learning_rate, max_depth=max_depth, random_state=self.config["random_state"])
             hyperparameters = {
-                "n_estimators": trial.suggest_int("n_estimators", *model_space.get("n_estimators", (50, 200))),
-                "learning_rate": trial.suggest_float("learning_rate", *model_space.get("learning_rate", (0.01, 0.3))),
-                "max_depth": trial.suggest_int("max_depth", *model_space.get("max_depth", (3, 10))),
-                "subsample": trial.suggest_float("subsample", *model_space.get("subsample", (0.8, 1.0))),
-                "random_state": self.config["random_state"]
+                'n_estimators': n_estimators,
+                'learning_rate': learning_rate,
+                'max_depth': max_depth
             }
-            model = GradientBoostingClassifier(**hyperparameters)
-        
-        elif model_name == "logistic_regression":
+        elif model_name == 'logistic_regression':
+            C = trial.suggest_loguniform('C', 1e-2, 1e2)
+            solver = trial.suggest_categorical('solver', ['liblinear', 'lbfgs'])
+            model = LogisticRegression(C=C, solver=solver, random_state=self.config["random_state"], max_iter=1000)
             hyperparameters = {
-                "C": trial.suggest_float("C", *model_space.get("C", (0.001, 100.0)), log=True),
-                "penalty": trial.suggest_categorical("penalty", model_space.get("penalty", ["l1", "l2"])),
-                "solver": trial.suggest_categorical("solver", model_space.get("solver", ["liblinear", "lbfgs"])),
-                "random_state": self.config["random_state"],
-                "max_iter": 1000
+                'C': C,
+                'solver': solver
             }
-            model = LogisticRegression(**hyperparameters)
-        
-        elif model_name == "svm":
+        elif model_name == 'svm':
+            C = trial.suggest_loguniform('C', 1e-2, 1e2)
+            kernel = trial.suggest_categorical('kernel', ['linear', 'rbf'])
+            model = SVC(C=C, kernel=kernel, random_state=self.config["random_state"], probability=True)
             hyperparameters = {
-                "C": trial.suggest_float("C", *model_space.get("C", (0.001, 100.0)), log=True),
-                "kernel": trial.suggest_categorical("kernel", model_space.get("kernel", ["rbf", "poly", "sigmoid"])),
-                "gamma": trial.suggest_float("gamma", *model_space.get("gamma", (0.001, 1.0)), log=True),
-                "random_state": self.config["random_state"]
+                'C': C,
+                'kernel': kernel
             }
-            model = SVC(**hyperparameters)
-        
-        elif model_name == "mlp":
-            hidden_layer_sizes = tuple([
-                trial.suggest_int(f"hidden_layer_{i}", 50, 200) 
-                for i in range(trial.suggest_int("n_hidden_layers", 1, 3))
-            ])
+        elif model_name == 'mlp':
+            hidden_layer_sizes_choice = trial.suggest_categorical('hidden_layer_sizes', ['(50,)', '(100,)', '(50, 50)'])
+            hidden_layer_sizes = eval(hidden_layer_sizes_choice)
+            activation = trial.suggest_categorical('activation', ['relu', 'tanh'])
+            alpha = trial.suggest_loguniform('alpha', 1e-5, 1e-2)
+            model = MLPClassifier(hidden_layer_sizes=hidden_layer_sizes, activation=activation, alpha=alpha, random_state=self.config["random_state"], max_iter=1000)
             hyperparameters = {
-                "hidden_layer_sizes": hidden_layer_sizes,
-                "learning_rate_init": trial.suggest_float("learning_rate_init", 0.001, 0.1, log=True),
-                "alpha": trial.suggest_float("alpha", 0.0001, 0.1, log=True),
-                "max_iter": 1000,
-                "random_state": self.config["random_state"]
+                'hidden_layer_sizes': hidden_layer_sizes_choice,
+                'activation': activation,
+                'alpha': alpha
             }
-            model = MLPClassifier(**hyperparameters)
-        
-        else:
-            raise ValueError(f"Unknown model name: {model_name}")
-        
+        # Add other model types as needed
         return model, hyperparameters
-    
-    def _train_pytorch_model(
-        self,
-        model: nn.Module,
-        X_train: np.ndarray,
-        y_train: np.ndarray,
-        X_test: np.ndarray,
-        y_test: np.ndarray,
-        lr: float = 0.001,
-        batch_size: int = 32,
-        epochs: int = 50
-    ) -> Tuple[nn.Module, Dict[str, List[float]]]:
-        """Train PyTorch model"""
-        
-        # Convert to tensors
-        X_train_tensor = torch.FloatTensor(X_train)
-        y_train_tensor = torch.LongTensor(y_train)
-        X_test_tensor = torch.FloatTensor(X_test)
-        y_test_tensor = torch.LongTensor(y_test)
-        
-        # Create data loaders
-        train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        
-        # Loss and optimizer
-        criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        
-        # Training history
-        history = {
-            'train_loss': [],
-            'train_accuracy': [],
-            'val_loss': [],
-            'val_accuracy': []
-        }
-        
-        # Training loop
-        for epoch in range(epochs):
-            model.train()
-            train_loss = 0.0
-            correct = 0
-            total = 0
-            
-            for batch_X, batch_y in train_loader:
-                optimizer.zero_grad()
-                outputs = model(batch_X)
-                loss = criterion(outputs, batch_y)
-                loss.backward()
-                optimizer.step()
-                
-                train_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total += batch_y.size(0)
-                correct += (predicted == batch_y).sum().item()
-            
-            train_accuracy = 100 * correct / total
-            
-            # Validation
-            model.eval()
-            with torch.no_grad():
-                val_outputs = model(X_test_tensor)
-                val_loss = criterion(val_outputs, y_test_tensor)
-                _, val_predicted = torch.max(val_outputs.data, 1)
-                val_accuracy = 100 * (val_predicted == y_test_tensor).sum().item() / y_test_tensor.size(0)
-            
-            history['train_loss'].append(train_loss / len(train_loader))
-            history['train_accuracy'].append(train_accuracy)
-            history['val_loss'].append(val_loss.item())
-            history['val_accuracy'].append(val_accuracy)
-        
-        return model, history
-    
+
     async def _load_dataset(self, dataset_config: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
-        """Load dataset based on configuration"""
+        """Load and preprocess dataset"""
+        data_path = dataset_config.get("data_path")
+        feature_columns = dataset_config.get("feature_columns", [])
+        target_column = dataset_config.get("target_column")
         
-        # This would load data from various sources
-        # For now, return dummy data
-        X = np.random.rand(1000, 10)
-        y = np.random.randint(0, 2, 1000)
+        if not data_path or not target_column:
+            raise ValueError("Dataset config must contain 'data_path' and 'target_column'")
+        
+        # Load data using Spark if available, otherwise Pandas
+        if self.spark_session:
+            df = self.spark_session.read.parquet(data_path) if data_path.endswith(".parquet") else self.spark_session.read.csv(data_path, header=True, inferSchema=True)
+            df_pd = df.toPandas()
+        else:
+            if data_path.endswith(".csv"):
+                df_pd = pd.read_csv(data_path)
+            elif data_path.endswith(".parquet"):
+                df_pd = pd.read_parquet(data_path)
+            elif data_path.endswith(".json"):
+                df_pd = pd.read_json(data_path)
+            else:
+                raise ValueError(f"Unsupported file format: {data_path}")
+        
+        if feature_columns:
+            X = df_pd[feature_columns].values
+        else:
+            X = df_pd.drop(columns=[target_column]).values
+
+        y = df_pd[target_column].values
+        
+        # Impute missing values (simple imputation for demonstration)
+        imputer = SimpleImputer(strategy='mean')
+        X = imputer.fit_transform(X)
         
         return X, y
-    
-    async def _perform_feature_engineering(
-        self,
-        X: np.ndarray,
-        config: Dict[str, Any]
-    ) -> np.ndarray:
-        """Perform feature engineering"""
+
+    async def _perform_feature_engineering(self, X: np.ndarray, training_config: Dict[str, Any]) -> np.ndarray:
+        """Perform feature engineering based on training config"""
         
-        # Feature scaling
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
+        pipeline_steps = []
         
-        return X_scaled
-    
+        # Scaling
+        if training_config.get("scaling") == "standard":
+            pipeline_steps.append(("scaler", StandardScaler()))
+        
+        # PCA
+        if training_config.get("pca_components", 0) > 0:
+            pipeline_steps.append(("pca", PCA(n_components=training_config["pca_components"])))
+        
+        if pipeline_steps:
+            pipeline = Pipeline(pipeline_steps)
+            X_processed = pipeline.fit_transform(X)
+        else:
+            X_processed = X
+            
+        return X_processed
+
     async def _generate_results_summary(self, experiment: AutoMLExperiment) -> Dict[str, Any]:
-        """Generate results summary for experiment"""
-        
-        results = self.experiment_results[experiment.experiment_id]
-        
-        if not results:
-            return {}
-        
-        # Sort by performance
-        results_sorted = sorted(results, key=lambda x: x.performance_metrics.get("test_score", 0), reverse=True)
-        
+        """Generate a summary of experiment results"""
         summary = {
-            "best_model": {
-                "model_id": results_sorted[0].model_id,
-                "model_name": results_sorted[0].model_name,
-                "score": results_sorted[0].performance_metrics.get("test_score", 0),
-                "hyperparameters": results_sorted[0].hyperparameters
-            },
-            "top_models": [
-                {
-                    "model_id": result.model_id,
-                    "model_name": result.model_name,
-                    "score": result.performance_metrics.get("test_score", 0)
-                }
-                for result in results_sorted[:5]
-            ],
-            "performance_distribution": {
-                "mean_score": np.mean([r.performance_metrics.get("test_score", 0) for r in results]),
-                "std_score": np.std([r.performance_metrics.get("test_score", 0) for r in results]),
-                "min_score": min([r.performance_metrics.get("test_score", 0) for r in results]),
-                "max_score": max([r.performance_metrics.get("test_score", 0) for r in results])
-            },
-            "training_time": {
-                "total_time": sum([r.training_time for r in results]),
-                "average_time": np.mean([r.training_time for r in results])
-            }
+            "experiment_id": experiment.experiment_id,
+            "experiment_name": experiment.experiment_name,
+            "status": experiment.status.value,
+            "best_score": experiment.best_score,
+            "best_model_id": experiment.best_model.get("model_id") if experiment.best_model else None,
+            "trials_completed": experiment.trials_completed,
+            "total_trials": experiment.total_trials,
+            "start_time": experiment.started_at.isoformat() if experiment.started_at else None,
+            "end_time": experiment.completed_at.isoformat() if experiment.completed_at else None,
+            "duration_seconds": (experiment.completed_at - experiment.started_at).total_seconds() if experiment.started_at and experiment.completed_at else 0,
+            "model_type": experiment.model_type.value,
+            "optimization_objective": experiment.optimization_objective.value,
+            "dataset_config": experiment.dataset_config,
+            "training_config": experiment.training_config
         }
+
+        # Add top N models to summary
+        top_n = sorted(self.experiment_results[experiment.experiment_id],
+                       key=lambda x: x.performance_metrics.get("test_score", 0), reverse=True)[:5]
+        summary["top_models"] = [
+            {
+                "model_id": m.model_id,
+                "model_name": m.model_name,
+                "performance": m.performance_metrics.get("test_score", 0),
+                "hyperparameters": m.hyperparameters
+            } for m in top_n
+        ]
         
         return summary
     
@@ -931,59 +890,45 @@ class AutoMLService:
     async def _load_experiments(self):
         """Load existing experiments from storage"""
         
-        experiments_file = self.model_storage_path / "experiments.json"
+        experiments_file = self.model_storage_path / "automl_experiments.json"
         if experiments_file.exists():
             try:
                 with open(experiments_file, 'r') as f:
                     experiments_data = json.load(f)
                 
                 for exp_data in experiments_data:
+                    # Convert string enums back to Enum objects
+                    exp_data["model_type"] = ModelType(exp_data["model_type"])
+                    exp_data["optimization_objective"] = OptimizationObjective(exp_data["optimization_objective"])
+                    exp_data["status"] = AutoMLStatus(exp_data["status"])
+                    
+                    # Convert datetime strings to datetime objects
+                    for k in ["created_at", "started_at", "completed_at"]:
+                        if exp_data.get(k):
+                            exp_data[k] = datetime.fromisoformat(exp_data[k])
+                            
                     experiment = AutoMLExperiment(**exp_data)
                     self.active_experiments[experiment.experiment_id] = experiment
                 
-                logger.info(f"Loaded {len(self.active_experiments)} experiments")
+                logger.info(f"Loaded {len(self.active_experiments)} AutoML experiments")
             except Exception as e:
-                logger.error(f"Failed to load experiments: {e}")
+                logger.error(f"Failed to load AutoML experiments: {e}")
     
     async def _save_experiments(self):
         """Save experiments to storage"""
         
-        experiments_file = self.model_storage_path / "experiments.json"
+        experiments_file = self.model_storage_path / "automl_experiments.json"
         try:
-            experiments_data = [asdict(exp) for exp in self.active_experiments.values()]
+            experiments_data = [
+                asdict(exp) for exp in self.active_experiments.values()
+            ]
             
             with open(experiments_file, 'w') as f:
                 json.dump(experiments_data, f, indent=2, default=str)
             
-            logger.info(f"Saved {len(self.active_experiments)} experiments")
+            logger.info(f"Saved {len(self.active_experiments)} AutoML experiments")
         except Exception as e:
-            logger.error(f"Failed to save experiments: {e}")
-    
-    # ===== BACKGROUND TASKS =====
-    
-    async def _experiment_monitor(self):
-        """Monitor active experiments"""
-        
-        while True:
-            try:
-                current_time = datetime.utcnow()
-                
-                for experiment_id, experiment in list(self.active_experiments.items()):
-                    if experiment.status == AutoMLStatus.RUNNING:
-                        # Check for timeout
-                        if experiment.started_at and \
-                           (current_time - experiment.started_at).total_seconds() > (self.config["timeout_hours"] * 3600):
-                            
-                            experiment.status = AutoMLStatus.CANCELLED
-                            experiment.completed_at = current_time
-                            
-                            logger.warning(f"Experiment {experiment_id} timed out")
-                
-                await asyncio.sleep(60)  # Check every minute
-                
-            except Exception as e:
-                logger.error(f"Error in experiment monitoring: {e}")
-                await asyncio.sleep(60)
+            logger.error(f"Failed to save AutoML experiments: {e}")
     
     async def _performance_tracking(self):
         """Track AutoML performance metrics"""
@@ -1024,36 +969,36 @@ class AutoMLService:
         model_candidate: ModelCandidate,
         artifact_path: str,
         experiment_name: str,
-        model_framework: str
+        model_framework: str,
+        dataset_version_id: Optional[str] = None,
+        feature_ids: Optional[List[str]] = None
     ):
-        """Register model with the central model registry"""
-        
+        """
+        Registers a model candidate with the central model registry service.
+        """
         try:
-            # Create model metadata
-            model_metadata = {
-                "model_name": f"{experiment_name}_{model_candidate.model_name}",
-                "model_type": model_candidate.model_type,
-                "framework": model_framework,
-                "hyperparameters": model_candidate.hyperparameters,
-                "performance_metrics": model_candidate.performance_metrics,
-                "training_time": model_candidate.training_time,
-                "model_size": model_candidate.model_size,
-                "feature_importance": model_candidate.feature_importance,
-                "cross_validation_scores": model_candidate.cross_validation_scores,
-                "experiment_id": model_candidate.experiment_id,
-                "created_at": model_candidate.created_at.isoformat() if model_candidate.created_at else None
-            }
-            
-            # Register with model registry service
-            version_id = await self.model_registry_service.register_model(
+            # Generate a consistent version_id for the model within the registry
+            # This can be based on model_id and a timestamp
+            version_id = f"{model_candidate.model_id}_{int(model_candidate.created_at.timestamp())}"
+
+            await self.model_registry_service.register_model_version(
                 model_name=f"{experiment_name}_{model_candidate.model_name}",
-                version=f"v_{model_candidate.model_id}",
+                version_id=version_id,
                 artifact_path=artifact_path,
-                metadata=model_metadata,
-                tags=["automl", model_candidate.model_type, model_framework]
+                metadata={
+                    "experiment_id": model_candidate.experiment_id,
+                    "model_type": model_candidate.model_type,
+                    "model_framework": model_framework,
+                    "hyperparameters": model_candidate.hyperparameters,
+                    "performance_metrics": model_candidate.performance_metrics,
+                    "training_time": model_candidate.training_time,
+                    "model_size": model_candidate.model_size,
+                    "cross_validation_scores": model_candidate.cross_validation_scores
+                },
+                is_active=False, # AutoML typically registers, deployment service activates
+                dataset_version_id=dataset_version_id, # Pass dataset_version_id
+                feature_ids=feature_ids # Pass feature_ids
             )
-            
-            logger.info(f"Registered model {model_candidate.model_id} with registry: {version_id}")
             
             # Publish model registration event
             await shared_pulsar_client.publish(
@@ -1071,7 +1016,78 @@ class AutoMLService:
             
         except Exception as e:
             logger.error(f"Failed to register model {model_candidate.model_id}: {e}")
-    
+
+    # ===== KNOWLEDGE GRAPH INTEGRATION =====
+
+    async def _store_experiment_run_in_kg(self, experiment: AutoMLExperiment):
+        """Stores AutoML experiment run as a vertex in the Knowledge Graph."""
+        try:
+            vertex_data = {
+                "experiment_id": experiment.experiment_id,
+                "experiment_name": experiment.experiment_name,
+                "model_type": experiment.model_type.value,
+                "optimization_objective": experiment.optimization_objective.value,
+                "dataset_config": experiment.dataset_config,
+                "training_config": experiment.training_config,
+                "search_space": experiment.search_space,
+                "status": experiment.status.value,
+                "created_at": experiment.created_at.isoformat(),
+                "started_at": experiment.started_at.isoformat() if experiment.started_at else None,
+                "completed_at": experiment.completed_at.isoformat() if experiment.completed_at else None,
+                "best_score": experiment.best_score,
+                "trials_completed": experiment.trials_completed,
+                "total_trials": experiment.total_trials,
+                "results_summary": experiment.results_summary
+            }
+            await self.kg_client.add_vertex(
+                "ExperimentRun",
+                experiment.experiment_id,
+                vertex_data
+            )
+            logger.info(f"Stored ExperimentRun {experiment.experiment_id} in KG.")
+        except Exception as e:
+            logger.error(f"Failed to store ExperimentRun in KG: {e}", exc_info=True)
+
+    async def _create_experiment_lineage_in_kg(
+        self,
+        experiment_id: str,
+        model_version_id: Optional[str] = None,
+        dataset_version_id: Optional[str] = None,
+        feature_ids: Optional[List[str]] = None
+    ):
+        """Creates lineage relationships for an AutoML experiment run in the Knowledge Graph."""
+        try:
+            if model_version_id:
+                await self.kg_client.add_edge(
+                    "produced_model",
+                    experiment_id,
+                    model_version_id,
+                    {"relationship": "produced_model"}
+                )
+                logger.info(f"Created 'produced_model' edge from {experiment_id} to {model_version_id}.")
+
+            if dataset_version_id:
+                await self.kg_client.add_edge(
+                    "used_dataset",
+                    experiment_id,
+                    dataset_version_id,
+                    {"relationship": "used_dataset"}
+                )
+                logger.info(f"Created 'used_dataset' edge from {experiment_id} to {dataset_version_id}.")
+
+            if feature_ids:
+                for feature_id in feature_ids:
+                    await self.kg_client.add_edge(
+                        "used_feature",
+                        experiment_id,
+                        feature_id,
+                        {"relationship": "used_feature"}
+                    )
+                logger.info(f"Created 'used_feature' edge from {experiment_id} to {feature_id}.")
+
+        except Exception as e:
+            logger.error(f"Failed to create experiment lineage in KG: {e}", exc_info=True)
+
     # ===== PUBLIC API METHODS =====
     
     async def get_experiment_status(self, experiment_id: str) -> Optional[Dict[str, Any]]:
@@ -1098,46 +1114,27 @@ class AutoMLService:
             "completed_at": experiment.completed_at,
             "results_count": len(results)
         }
-    
-    async def get_experiment_results(self, experiment_id: str) -> List[ModelCandidate]:
-        """Get results for an experiment"""
+
+    async def get_automl_results(self, experiment_id: str) -> List[Dict[str, Any]]:
+        """Get AutoML experiment results"""
         
-        return self.experiment_results.get(experiment_id, [])
-    
-    async def get_model_leaderboard(self, model_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get model leaderboard"""
+        results = self.experiment_results.get(experiment_id, [])
+        return [asdict(r) for r in results]
+
+    async def get_model_leaderboard(self, model_type: Optional[ModelType] = None) -> List[Dict[str, Any]]:
+        """Get model leaderboard across all experiments"""
         
-        all_results = []
-        for results in self.experiment_results.values():
-            all_results.extend(results)
+        all_models = []
+        for experiment_id in self.experiment_results:
+            all_models.extend(self.experiment_results[experiment_id])
         
         if model_type:
-            all_results = [r for r in all_results if r.model_type == model_type]
+            all_models = [m for m in all_models if m.model_type == model_type.value]
+
+        # Sort by best performance metric (e.g., test_score)
+        leaderboard = sorted(all_models, key=lambda x: x.performance_metrics.get("test_score", float('-inf')), reverse=True)
         
-        # Sort by performance
-        all_results.sort(key=lambda x: x.performance_metrics.get("test_score", 0), reverse=True)
-        
-        return [
-            {
-                "model_id": result.model_id,
-                "model_name": result.model_name,
-                "model_type": result.model_type,
-                "score": result.performance_metrics.get("test_score", 0),
-                "training_time": result.training_time,
-                "created_at": result.created_at
-            }
-            for result in all_results[:50]  # Top 50
-        ]
-    
-    async def get_automl_metrics(self) -> Dict[str, Any]:
-        """Get AutoML service metrics"""
-        
-        return {
-            "service_metrics": self.automl_metrics,
-            "active_experiments": len([exp for exp in self.active_experiments.values() if exp.status == AutoMLStatus.RUNNING]),
-            "completed_experiments": len([exp for exp in self.active_experiments.values() if exp.status == AutoMLStatus.COMPLETED]),
-            "total_models": sum(len(results) for results in self.experiment_results.values())
-        }
+        return [asdict(m) for m in leaderboard[:100]]
 
 # Global instance
 automl_service = AutoMLService() 
